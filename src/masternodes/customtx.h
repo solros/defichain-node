@@ -90,7 +90,11 @@ enum struct CustomTxType : uint8_t
     TakeLoan                = 'X',
     PaybackLoan             = 'H',
     PaybackLoanV2           = 'k',
-    AuctionBid              = 'I'
+    AuctionBid              = 'I',
+
+    // On-Chain-Gov
+    CreateCfp               = 'P',
+    Vote                    = 'O',
 };
 
 extern const std::vector<unsigned char> DfTxMarker;
