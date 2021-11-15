@@ -69,7 +69,7 @@ UniValue setcollateraltoken(const JSONRPCRequest& request) {
                     {"metadata", RPCArg::Type::OBJ, RPCArg::Optional::NO, "",
                         {
                             {"token", RPCArg::Type::STR, RPCArg::Optional::NO, "Symbol or id of collateral token"},
-                            {"factor", RPCArg::Type::NUM, RPCArg::Optional::NO, "Collateralization factor"},
+                            {"factor", RPCArg::Type::NUM, RPCArg::Optional::NO, "Collateralization factor, between 0 and 1."},
                             {"fixedIntervalPriceId", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "token/currency pair to use for price of token"},
                             {"activateAfterBlock", RPCArg::Type::NUM, RPCArg::Optional::OMITTED, "changes will be active after the block height (Optional)"},
                         },
@@ -90,7 +90,7 @@ UniValue setcollateraltoken(const JSONRPCRequest& request) {
                         "\"hash\"                  (string) The hex-encoded hash of broadcasted transaction\n"
                 },
                 RPCExamples{
-                        HelpExampleCli("setcollateraltoken", R"('{"token":"TSLA","factor":"150","fixedIntervalPriceId":"TSLA/USD"}')")
+                        HelpExampleCli("setcollateraltoken", R"('{"token":"DFI","factor":"1","fixedIntervalPriceId":"DFI/USD"}')")
                         },
      }.Check(request);
 
