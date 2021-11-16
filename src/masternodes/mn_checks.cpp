@@ -3529,7 +3529,7 @@ Res  SwapToDFIOverUSD(CCustomCSView & mnview, DCT_ID tokenId, CAmount amount, CS
     if (!token)
         return Res::Err("Cannot find token with id %s!", tokenId.ToString());
 
-    // TODO: Optimize double look up later when first token is DUSD. 
+    // TODO: Optimize double look up later when first token is DUSD.
     auto dUsdToken = mnview.GetToken("DUSD");
     if (!dUsdToken)
         return Res::Err("Cannot find token DUSD");
