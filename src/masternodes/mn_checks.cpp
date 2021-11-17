@@ -2567,6 +2567,15 @@ public:
             if (!res)
                 return res;
 
+            if (static_cast<int>(height) >= consensus.GreatWorldHeight)
+            {
+                auto rate = mnview.GetInterestRate(obj.vaultId, tokenId);
+                if (!rate)
+                    return Res::Err("Cannot get interest rate for this token (%s)!", loanToken->symbol);
+                if (rate->interestPerBlock == 0)
+                    return Res::Err("Cannot take this amount of loan for %s, you need to take higher amount!", loanToken->symbol);
+            }
+
             auto tokenCurrency = loanToken->fixedIntervalPriceId;
 
             LogPrint(BCLog::ORACLE,"CLoanTakeLoanMessage()->%s->", loanToken->symbol); /* Continued */
@@ -2699,7 +2708,7 @@ public:
                     return Res::Err("Cannot get interest rate for this token (%s)!", loanToken->symbol);
 
                 if (newRate->interestPerBlock == 0)
-                    return Res::Err("Partially payback is unavailable");
+                    return Res::Err("Cannot payback this amount of loan for %s, either payback full amount or less than this amount!", loanToken->symbol);
             }
 
             res = mnview.SubMintedTokens(loanToken->creationTx, subLoan);
