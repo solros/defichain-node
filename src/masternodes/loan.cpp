@@ -241,17 +241,17 @@ Res CLoanView::StoreInterest(uint32_t height, const CVaultId& vaultId, const std
         LogPrint(BCLog::LOAN,"%s():\n", __func__);
         rate.interestToHeight = TotalInterest(rate, height);
     }
-    CAmount interestPerBlock;
+    auto interestPerBlock = rate.interestPerBlock;
     if (int(height) >= Params().GetConsensus().FortCanningMuseumHeight) {
-        interestPerBlock = InterestPerBlockV2(loanIncreased, token->interest, scheme->rate);
+        interestPerBlock = InterestPerBlockV2(interestPerBlock + loanIncreased, token->interest, scheme->rate);
         if (interestPerBlock == 0) {
             return Res::Err("Loan amount is below minimum");
         }
     } else {
-        interestPerBlock = InterestPerBlock(loanIncreased, token->interest, scheme->rate);
+        interestPerBlock += InterestPerBlock(loanIncreased, token->interest, scheme->rate);
     }
     rate.height = height;
-    rate.interestPerBlock += interestPerBlock;
+    rate.interestPerBlock = interestPerBlock;
 
     WriteBy<LoanInterestByVault>(std::make_pair(vaultId, id), rate);
     return Res::Ok();
@@ -280,14 +280,19 @@ Res CLoanView::EraseInterest(uint32_t height, const CVaultId& vaultId, const std
     LogPrint(BCLog::LOAN,"%s():\n", __func__);
     rate.interestToHeight = std::max(CAmount{0}, TotalInterest(rate, height) - interestDecreased);
 
-    CAmount interestPerBlock;
+    auto interestPerBlock = rate.interestPerBlock;
     if (int(height) >= Params().GetConsensus().FortCanningMuseumHeight) {
-        interestPerBlock = InterestPerBlockV2(loanDecreased, token->interest, scheme->rate);
+        auto diff = interestPerBlock - loanDecreased;
+        if (diff > loanDecreased) {
+            interestPerBlock = InterestPerBlockV2(diff, token->interest, scheme->rate);
+        } else {
+            interestPerBlock -= InterestPerBlock(loanDecreased, token->interest, scheme->rate);
+        }
     } else {
-        interestPerBlock = InterestPerBlock(loanDecreased, token->interest, scheme->rate);
+        interestPerBlock -= InterestPerBlock(loanDecreased, token->interest, scheme->rate);
     }
     rate.height = height;
-    rate.interestPerBlock = std::max(CAmount{0}, rate.interestPerBlock - interestPerBlock);
+    rate.interestPerBlock = std::max(CAmount{0}, interestPerBlock);
 
     WriteBy<LoanInterestByVault>(std::make_pair(vaultId, id), rate);
     return Res::Ok();
