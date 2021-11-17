@@ -2556,6 +2556,13 @@ public:
             if (!res)
                 return res;
 
+            if (static_cast<int>(height) >= consensus.FortCanningMuseumHeight)
+            {
+                auto rate = mnview.GetInterestRate(obj.vaultId, tokenId);
+                if (rate && rate->height && height - rate->height < consensus.blocksCollateralizationRatioCalculation())
+                    return Res::Err("Vault <%s> is under blocking period", obj.vaultId.GetHex());
+            }
+
             res = mnview.StoreInterest(height, obj.vaultId, vault->schemeId, tokenId, kv.second);
             if (!res)
                 return res;
@@ -2660,6 +2667,10 @@ public:
             if (!rate)
                 return Res::Err("Cannot get interest rate for this token (%s)!", loanToken->symbol);
 
+            if (static_cast<int>(height) >= consensus.FortCanningMuseumHeight)
+                if (rate->height && height - rate->height < consensus.blocksCollateralizationRatioCalculation())
+                    return Res::Err("Vault <%s> is under blocking period", obj.vaultId.GetHex());
+
             LogPrint(BCLog::LOAN,"CLoanPaybackMessage()->%s->", loanToken->symbol); /* Continued */
             auto subInterest = TotalInterest(*rate, height);
             auto subLoan = kv.second - subInterest;
@@ -2680,6 +2691,16 @@ public:
             res = mnview.EraseInterest(height, obj.vaultId, vault->schemeId, tokenId, subLoan, subInterest);
             if (!res)
                 return res;
+
+            if (static_cast<int>(height) >= consensus.FortCanningMuseumHeight && subLoan < it->second)
+            {
+                auto newRate = mnview.GetInterestRate(obj.vaultId, tokenId);
+                if (!newRate)
+                    return Res::Err("Cannot get interest rate for this token (%s)!", loanToken->symbol);
+
+                if (newRate->interestPerBlock == 0)
+                    return Res::Err("Partially payback is unavailable");
+            }
 
             res = mnview.SubMintedTokens(loanToken->creationTx, subLoan);
             if (!res)

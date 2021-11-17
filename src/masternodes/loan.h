@@ -218,7 +218,6 @@ struct CInterestRate
     }
 };
 
-CAmount InterestPerBlock(const CInterestRate& rate);
 CAmount TotalInterest(const CInterestRate& rate, uint32_t height);
 
 class CLoanTakeLoanMessage
