@@ -2560,6 +2560,9 @@ public:
 
             if (static_cast<int>(height) >= consensus.FortCanningMuseumHeight)
             {
+                // You can't take loan immediately after you've just taken one.
+                // This implementation also means, you can't take a loan immediately after the
+                // vault moves back from auction into solvent state (all points of StoreInterest call).
                 auto rate = mnview.GetInterestRate(obj.vaultId, tokenId);
                 if (rate && rate->height && height - rate->height < consensus.blocksCollateralizationRatioCalculation())
                     return Res::Err("Vault <%s> is under blocking period", obj.vaultId.GetHex());

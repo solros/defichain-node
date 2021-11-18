@@ -237,19 +237,25 @@ Res CLoanView::StoreInterest(uint32_t height, const CVaultId& vaultId, const std
     if (rate.height > height || height == 0) {
         return Res::Err("Cannot store height in the past");
     }
-    if (rate.height) {
-        LogPrint(BCLog::LOAN,"%s():\n", __func__);
-        rate.interestToHeight = TotalInterest(rate, height);
-    }
+    
+    LogPrint(BCLog::LOAN, "%s():\n", __func__);
+    rate.interestToHeight = TotalInterest(rate, height);
     auto interestPerBlock = rate.interestPerBlock;
+
+    auto oldInterestPerBlock = interestPerBlock + InterestPerBlock(loanIncreased, token->interest, scheme->rate);
+    auto newInterestPerBlock = InterestPerBlockV2(interestPerBlock + loanIncreased, token->interest, scheme->rate);
+    LogPrint(BCLog::LOAN, "\t\tInterestPerBlock: %d\n", oldInterestPerBlock);
+    LogPrint(BCLog::LOAN, "\t\tInterestPerBlockV2: %d\n", newInterestPerBlock);
+
     if (int(height) >= Params().GetConsensus().FortCanningMuseumHeight) {
-        interestPerBlock = InterestPerBlockV2(interestPerBlock + loanIncreased, token->interest, scheme->rate);
+        interestPerBlock = newInterestPerBlock;
         if (interestPerBlock == 0) {
             return Res::Err("Loan amount is below minimum");
         }
     } else {
-        interestPerBlock += InterestPerBlock(loanIncreased, token->interest, scheme->rate);
+        interestPerBlock = oldInterestPerBlock;
     }
+
     rate.height = height;
     rate.interestPerBlock = interestPerBlock;
 
@@ -281,16 +287,25 @@ Res CLoanView::EraseInterest(uint32_t height, const CVaultId& vaultId, const std
     rate.interestToHeight = std::max(CAmount{0}, TotalInterest(rate, height) - interestDecreased);
 
     auto interestPerBlock = rate.interestPerBlock;
-    if (int(height) >= Params().GetConsensus().FortCanningMuseumHeight) {
-        auto diff = interestPerBlock - loanDecreased;
-        if (diff > loanDecreased) {
-            interestPerBlock = InterestPerBlockV2(diff, token->interest, scheme->rate);
-        } else {
-            interestPerBlock -= InterestPerBlock(loanDecreased, token->interest, scheme->rate);
-        }
+
+    auto newInterestPerBlock = interestPerBlock;
+    auto diff = newInterestPerBlock - loanDecreased;
+    if (diff > loanDecreased) {
+        newInterestPerBlock = InterestPerBlockV2(diff, token->interest, scheme->rate);
     } else {
-        interestPerBlock -= InterestPerBlock(loanDecreased, token->interest, scheme->rate);
+        newInterestPerBlock -= InterestPerBlock(loanDecreased, token->interest, scheme->rate);
     }
+
+    auto oldInterestPerBlock = interestPerBlock - InterestPerBlock(loanDecreased, token->interest, scheme->rate);
+    LogPrint(BCLog::LOAN, "\t\tInterestPerBlock: %d\n", oldInterestPerBlock);
+    LogPrint(BCLog::LOAN, "\t\tInterestPerBlockV2: %d\n", newInterestPerBlock);
+
+    if (int(height) >= Params().GetConsensus().FortCanningMuseumHeight) {
+        interestPerBlock = newInterestPerBlock;
+    } else {
+        interestPerBlock = oldInterestPerBlock;
+    }
+
     rate.height = height;
     rate.interestPerBlock = std::max(CAmount{0}, interestPerBlock);
 
