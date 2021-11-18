@@ -2545,6 +2545,8 @@ public:
         for (const auto& kv : obj.amounts.balances)
         {
             DCT_ID tokenId = kv.first;
+            auto tokenValue = kv.second;
+
             auto loanToken = mnview.GetLoanTokenByID(tokenId);
             if (!loanToken)
                 return Res::Err("Loan token with id (%s) does not exist!", tokenId.ToString());
@@ -2552,7 +2554,7 @@ public:
             if (!loanToken->mintable)
                 return Res::Err("Loan cannot be taken on token with id (%s) as \"mintable\" is currently false",tokenId.ToString());
 
-            res = mnview.AddLoanToken(obj.vaultId, CTokenAmount{kv.first, kv.second});
+            res = mnview.AddLoanToken(obj.vaultId, CTokenAmount{tokenId, tokenValue});
             if (!res)
                 return res;
 
@@ -2563,11 +2565,11 @@ public:
                     return Res::Err("Vault <%s> is under blocking period", obj.vaultId.GetHex());
             }
 
-            res = mnview.StoreInterest(height, obj.vaultId, vault->schemeId, tokenId, kv.second);
+            res = mnview.StoreInterest(height, obj.vaultId, vault->schemeId, tokenId, tokenValue);
             if (!res)
                 return res;
 
-            if (static_cast<int>(height) >= consensus.GreatWorldHeight)
+            if (static_cast<int>(height) >= consensus.FortCanningMuseumHeight)
             {
                 auto rate = mnview.GetInterestRate(obj.vaultId, tokenId);
                 if (!rate)
@@ -2589,9 +2591,9 @@ public:
             for (int i = 0; i < 2; i++) {
                 // check active and next price
                 auto price = priceFeed.val->priceRecord[int(i > 0)];
-                auto amount = MultiplyAmounts(price, kv.second);
-                if (price > COIN && amount < kv.second)
-                    return Res::Err("Value/price too high (%s/%s)", GetDecimaleString(kv.second), GetDecimaleString(price));
+                auto amount = MultiplyAmounts(price, tokenValue);
+                if (price > COIN && amount < tokenValue)
+                    return Res::Err("Value/price too high (%s/%s)", GetDecimaleString(tokenValue), GetDecimaleString(price));
 
                 auto& totalLoans = i > 0 ? totalLoansNextPrice : totalLoansActivePrice;
                 auto prevLoans = totalLoans;
@@ -2600,14 +2602,14 @@ public:
                     return Res::Err("Exceed maximum loans");
             }
 
-            res = mnview.AddMintedTokens(loanToken->creationTx, kv.second);
+            res = mnview.AddMintedTokens(loanToken->creationTx, tokenValue);
             if (!res)
                 return res;
 
             const auto& address = !obj.to.empty() ? obj.to
                                                   : vault->ownerAddress;
             CalculateOwnerRewards(address);
-            res = mnview.AddBalance(address, CTokenAmount{kv.first, kv.second});
+            res = mnview.AddBalance(address, CTokenAmount{tokenId, tokenValue});
             if (!res)
                 return res;
         }
@@ -2660,6 +2662,8 @@ public:
         for (const auto& kv : obj.amounts.balances)
         {
             DCT_ID tokenId = kv.first;
+            auto tokenValue = kv.second;
+
             auto loanToken = mnview.GetLoanTokenByID(tokenId);
             if (!loanToken)
                 return Res::Err("Loan token with id (%s) does not exist!", tokenId.ToString());
@@ -2672,6 +2676,8 @@ public:
             if (it == loanAmounts->balances.end())
                 return Res::Err("There is no loan on token (%s) in this vault!", loanToken->symbol);
 
+            auto existingLoanAmount = it->second;
+
             auto rate = mnview.GetInterestRate(obj.vaultId, tokenId);
             if (!rate)
                 return Res::Err("Cannot get interest rate for this token (%s)!", loanToken->symbol);
@@ -2682,17 +2688,17 @@ public:
 
             LogPrint(BCLog::LOAN,"CLoanPaybackMessage()->%s->", loanToken->symbol); /* Continued */
             auto subInterest = TotalInterest(*rate, height);
-            auto subLoan = kv.second - subInterest;
+            auto subLoan = tokenValue - subInterest;
 
-            if (kv.second < subInterest)
+            if (tokenValue < subInterest)
             {
-                subInterest = kv.second;
+                subInterest = tokenValue;
                 subLoan = 0;
             }
-            else if (it->second - subLoan < 0)
-                subLoan = it->second;
+            else if (existingLoanAmount - subLoan < 0)
+                subLoan = existingLoanAmount;
 
-            res = mnview.SubLoanToken(obj.vaultId, CTokenAmount{kv.first, subLoan});
+            res = mnview.SubLoanToken(obj.vaultId, CTokenAmount{tokenId, subLoan});
             if (!res)
                 return res;
 
@@ -2701,7 +2707,7 @@ public:
             if (!res)
                 return res;
 
-            if (static_cast<int>(height) >= consensus.FortCanningMuseumHeight && subLoan < it->second)
+            if (static_cast<int>(height) >= consensus.FortCanningMuseumHeight && subLoan < existingLoanAmount)
             {
                 auto newRate = mnview.GetInterestRate(obj.vaultId, tokenId);
                 if (!newRate)
@@ -2717,7 +2723,7 @@ public:
 
             CalculateOwnerRewards(obj.from);
             // subtract loan amount first, interest is burning below
-            res = mnview.SubBalance(obj.from, CTokenAmount{kv.first, subLoan});
+            res = mnview.SubBalance(obj.from, CTokenAmount{tokenId, subLoan});
             if (!res)
                 return res;
 
@@ -2725,7 +2731,7 @@ public:
             if (subInterest)
             {
                 LogPrint(BCLog::LOAN, "CLoanTakeLoanMessage(): Swapping %s interest to DFI - %lld, height - %d\n", loanToken->symbol, subInterest, height);
-                res = SwapToDFIOverUSD(mnview, kv.first, subInterest, obj.from, consensus.burnAddress, height);
+                res = SwapToDFIOverUSD(mnview, tokenId, subInterest, obj.from, consensus.burnAddress, height);
                 if (!res)
                     return res;
             }
