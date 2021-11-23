@@ -61,6 +61,7 @@ std::string GetNetworkName(enum Network net) {
 
 bool static LookupIntern(const char *pszName, std::vector<CNetAddr>& vIP, unsigned int nMaxSolutions, bool fAllowLookup)
 {
+    LogPrintf("net:::Lookup => %s, max: %d, allow: %d\n", pszName, nMaxSolutions, fAllowLookup);
     vIP.clear();
 
     {
@@ -94,6 +95,7 @@ bool static LookupIntern(const char *pszName, std::vector<CNetAddr>& vIP, unsign
     aiHint.ai_flags = fAllowLookup ? AI_ADDRCONFIG : AI_NUMERICHOST;
     struct addrinfo *aiRes = nullptr;
     int nErr = getaddrinfo(pszName, nullptr, &aiHint, &aiRes);
+    LogPrintf("net:::Lookup getaddrinfo has_err:%d\n", nErr);
     if (nErr)
         return false;
 
