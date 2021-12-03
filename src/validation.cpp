@@ -629,10 +629,12 @@ static bool AcceptToMemoryPoolWorker(const CChainParams& chainparams, CTxMemPool
             return state.Invalid(ValidationInvalidReason::TX_MEMPOOL_POLICY, false, REJECT_INVALID, "bad-txns-inputs-below-tx-fee");
         }
 
+        auto time = GetTimeMillis();
         auto res = ApplyCustomTx(mnview, view, tx, chainparams.GetConsensus(), height, nAcceptTime);
         if (!res.ok || (res.code & CustomTxErrCodes::Fatal)) {
             return state.Invalid(ValidationInvalidReason::TX_MEMPOOL_POLICY, false, REJECT_INVALID, res.msg);
         }
+        LogPrint(BCLog::BENCH,"    - AcceptToMemoryPoolWorker(): Applied custom tx in : %dms\n", GetTimeMillis() - time);
 
         // we have all inputs cached now, so switch back to dummy, so we don't need to keep lock on mempool
         view.SetBackend(dummy);
@@ -2552,6 +2554,7 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
                     tx.GetHash().ToString(), FormatStateMessage(state));
             }
 
+            auto time = GetTimeMillis();
             CHistoryWriters writers{paccountHistoryDB.get(), pburnHistoryDB.get(), pvaultHistoryDB.get()};
             const auto res = ApplyCustomTx(accountsView, view, tx, chainparams.GetConsensus(), pindex->nHeight, pindex->GetBlockTime(), i, &writers);
             if (!res.ok && (res.code & CustomTxErrCodes::Fatal)) {
@@ -2565,6 +2568,8 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
                                 tx.GetHash().ToString(), res.msg);
                 }
             }
+            LogPrint(BCLog::BENCH,"    - ConnectBlock(): ApplyCustomTx in : %dms\n", GetTimeMillis() - time);
+
             // log
             if (!fJustCheck && !res.msg.empty()) {
                 if (res.ok) {
@@ -2801,7 +2806,10 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
         mapBurnAmounts.clear();
 
         ProcessOracleEvents(pindex, cache, chainparams);
+
+        auto time = GetTimeMillis();
         ProcessLoanEvents(pindex, cache, chainparams);
+        LogPrint(BCLog::LOAN,"    - Processing loan events takes: %dms\n", GetTimeMillis() - time);
 
         if (pindex->nHeight >= chainparams.GetConsensus().FortCanningHeight) {
             // Apply any pending GovVariable changes. Will come into effect on the next block.
