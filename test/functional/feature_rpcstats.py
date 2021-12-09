@@ -6,7 +6,6 @@
 """Test RPC stats."""
 
 from test_framework.test_framework import DefiTestFramework
-from test_framework.authproxy import JSONRPCException
 
 from test_framework.util import (
     assert_equal,
@@ -32,7 +31,7 @@ class RPCstats(DefiTestFramework):
         listrpcstats = self.nodes[0].listrpcstats()
         assert(any(elem for elem in listrpcstats if elem["name"] == "getnewaddress"))
         assert(any(elem for elem in listrpcstats if elem["name"] == "listunspent"))
-        
+
         listrpcstats = self.nodes[0].listrpcstats(True) # with verbosity
         assert(all(elem for elem in listrpcstats if elem["history"]))
 
@@ -42,6 +41,6 @@ class RPCstats(DefiTestFramework):
 
         getrpcstats = self.nodes[0].getrpcstats("listunspent", True) # with verbosity
         assert_equal(len(getrpcstats["history"]), 2)
-        
+
 if __name__ == '__main__':
     RPCstats().main ()
