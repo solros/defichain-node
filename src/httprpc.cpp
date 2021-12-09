@@ -9,6 +9,7 @@
 #include <httpserver.h>
 #include <rpc/protocol.h>
 #include <rpc/server.h>
+#include <rpc/stats.h>
 #include <sync.h>
 #include <ui_interface.h>
 #include <util/strencodings.h>
@@ -171,6 +172,8 @@ static bool CorsHandler(HTTPRequest *req) {
 
 static bool HTTPReq_JSONRPC(HTTPRequest* req, const std::string &)
 {
+    int64_t time = GetTimeMillis();
+
     // Handle CORS
     if (CorsHandler(req)) 
         return true;
@@ -230,6 +233,8 @@ static bool HTTPReq_JSONRPC(HTTPRequest* req, const std::string &)
 
         req->WriteHeader("Content-Type", "application/json");
         req->WriteReply(HTTP_OK, strReply);
+
+        statsRPC.add(jreq.strMethod, GetTimeMillis() - time, strReply.length());
     } catch (const UniValue& objError) {
         JSONErrorReply(req, objError, jreq.id);
         return false;
@@ -299,3 +304,5 @@ void StopHTTPRPC()
         httpRPCTimerInterface.reset();
     }
 }
+
+CRPCStats statsRPC;
