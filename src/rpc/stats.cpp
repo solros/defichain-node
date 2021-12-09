@@ -11,7 +11,7 @@ void CRPCStats::add(const std::string& name, const int64_t latency, const size_t
     map[name].push_back(info);
 }
 
-UniValue StatsToJSON(const std::string name, std::vector<const UniValue> stats, bool verbose = false) {
+UniValue StatsToJSON(const std::string name, UniValue stats, bool verbose = false) {
     UniValue ret(UniValue::VOBJ);
     if (!stats.size()) return ret;
 
@@ -24,8 +24,8 @@ UniValue StatsToJSON(const std::string name, std::vector<const UniValue> stats, 
     UniValue history(UniValue::VARR);
 
     ret.pushKV("name", name);
-    ret.pushKV("lastUsedTime", stats.back()["timestamp"]);
-    for (const auto& data : stats)
+    ret.pushKV("lastUsedTime", stats["timestamp"]);
+    for (const auto& data : stats.getValues())
     {
         int64_t latency = data["latency"].get_int();
         int64_t payload = data["payload"].get_int();
@@ -51,7 +51,7 @@ UniValue StatsToJSON(const std::string name, std::vector<const UniValue> stats, 
     payloadObj.pushKV("avg", (int64_t) avg_payload / stats.size());
     ret.pushKV("payload", payloadObj);
 
-    ret.pushKV("lastUsedTime", stats.back()["timestamp"]);
+    ret.pushKV("lastUsedTime", stats["timestamp"]);
     ret.pushKV("count", (int64_t) stats.size());
 
     if (verbose) ret.pushKV("history", history);

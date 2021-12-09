@@ -12,18 +12,18 @@
 class CRPCStats
 {
 private:
-    std::map<std::string, std::vector<const UniValue> > map;
+    std::map<std::string, UniValue> map;
 public:
     void add(const std::string& name, const int64_t latency, const size_t payload);
-    
-    std::vector<const UniValue> get(const std::string& name) { return map[name]; };
+
+    const UniValue get(const std::string& name) { return map[name]; };
 
     /**
     * Returns a full list of RPC stats
     * @returns full list of RPC stats.
     */
-    std::map<std::string, std::vector<const UniValue> > getList() { return map; };
-    
+    std::map<std::string, UniValue> getList() { return map; };
+
     // void save();
 };
 
