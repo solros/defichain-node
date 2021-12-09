@@ -112,8 +112,8 @@ static UniValue listrpcstats(const JSONRPCRequest& request)
 static const CRPCCommand commands[] =
 { //  category              name                      actor (function)         argNames
   //  --------------------- ------------------------  -----------------------  ----------
-    { "stats",            "getrpcstats",              &getrpcstats,          {} },
-    { "stats",            "listrpcstats",             &listrpcstats,         {} },
+    { "stats",            "getrpcstats",              &getrpcstats,          {"command", "verbose"} },
+    { "stats",            "listrpcstats",             &listrpcstats,         {"verbose"} },
 };
 // clang-format on
 
