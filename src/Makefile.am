@@ -216,6 +216,7 @@ DEFI_CORE_H = \
   rpc/request.h \
   rpc/server.h \
   rpc/util.h \
+  rpc/stats.h \
   scheduler.h \
   script/descriptor.h \
   script/keyorigin.h \
