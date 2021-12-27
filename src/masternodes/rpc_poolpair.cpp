@@ -1081,6 +1081,7 @@ UniValue testpoolswap(const JSONRPCRequest& request) {
                 }
                 throw JSONRPCError(RPC_INVALID_REQUEST, errorMsg);
             }
+            res.msg = compositeSwap.GetResult().ToString();
 
             for (const auto& id : poolIds) {
                 pools.push_back(id.ToString());
