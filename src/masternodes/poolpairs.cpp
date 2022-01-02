@@ -428,7 +428,17 @@ Res CPoolPair::Swap(CTokenAmount in, PoolPrice const & maxPrice, std::function<R
         return Res::Err("Swapping will lead to pool's reserve overflow");
     }
 
+    const auto originalPoolTo = reserveT;
+    const auto originalPoolFrom = reserveF;
+
     CAmount result = slopeSwap(in.nValue, reserveF, reserveT, height);
+
+    if (height >= Params().GetConsensus().FortCanningParkHeight && (
+        result > originalPoolTo ||
+        reserveF < originalPoolFrom ||
+        reserveT > originalPoolTo)) {
+        return Res::Err("Amount too large to swap");
+    }
 
     swapEvent = true; // (!!!)
 
@@ -443,7 +453,7 @@ CAmount CPoolPair::slopeSwap(CAmount unswapped, CAmount &poolFrom, CAmount &pool
     arith_uint256 poolT = arith_uint256(poolTo);
 
     arith_uint256 swapped = 0;
-    if (height < Params().GetConsensus().BayfrontGardensHeight || height >= Params().GetConsensus().FortCanningParkHeight) {
+    if (height < Params().GetConsensus().BayfrontGardensHeight) {
         CAmount chunk = poolFrom/SLOPE_SWAP_RATE < unswapped ? poolFrom/SLOPE_SWAP_RATE : unswapped;
         while (unswapped > 0) {
             //arith_uint256 stepFrom = std::min(poolFrom/1000, unswapped); // 0.1%
@@ -455,12 +465,19 @@ CAmount CPoolPair::slopeSwap(CAmount unswapped, CAmount &poolFrom, CAmount &pool
             unswapped -= stepFrom;
             swapped += stepTo;
         }
-    } else {
+    } else if (height <= Params().GetConsensus().FortCanningParkHeight) {
         arith_uint256 unswappedA = arith_uint256(unswapped);
 
         swapped = poolT - (poolT * poolF / (poolF + unswappedA));
         poolF += unswappedA;
         poolT -= swapped;
+    } else {
+        const double maxPool = std::max(poolFrom, poolTo);
+        const double minPool = std::min(poolFrom, poolTo);
+        const auto result = std::floor(poolTo - ((maxPool / (poolFrom + unswapped)) * minPool));
+        poolFrom += unswapped;
+        poolTo -= result;
+        return result;
     }
 
     poolFrom = poolF.GetLow64();
