@@ -52,8 +52,6 @@ class PoolPairTest (DefiTestFramework):
         idSilver = list(self.nodes[0].gettoken(symbolSILVER).keys())[0]
         accountGN0 = self.nodes[0].get_genesis_keys().ownerAuthAddress
         accountSN1 = self.nodes[1].get_genesis_keys().ownerAuthAddress
-        initialGold = self.nodes[0].getaccount(accountGN0, {}, True)[idGold]
-        initialSilver = self.nodes[1].getaccount(accountSN1, {}, True)[idSilver]
 
         owner = self.nodes[0].getnewaddress("", "legacy")
 
