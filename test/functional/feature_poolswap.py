@@ -324,6 +324,104 @@ class PoolPairTest (DefiTestFramework):
             errorString = e.error['message']
         assert("Price is higher than indicated" in errorString)
 
+        # Test round up setup
+        self.nodes[0].createtoken({
+                "symbol": "BTC",
+                "name": "Bitcoin",
+                "collateralAddress": accountGN0
+            })
+        self.nodes[0].createtoken({
+                "symbol": "LTC",
+                "name": "Litecoin",
+                "collateralAddress": accountGN0
+            })
+        self.nodes[0].generate(1)
+
+        symbolBTC = "BTC#" + self.get_id_token("BTC")
+        symbolLTC = "LTC#" + self.get_id_token("LTC")
+        idBitcoin = list(self.nodes[0].gettoken(symbolBTC).keys())[0]
+
+        self.nodes[0].minttokens("1@" + symbolBTC)
+        self.nodes[0].minttokens("101@" + symbolLTC)
+        self.nodes[0].generate(1)
+
+        self.nodes[0].createpoolpair({
+            "tokenA": symbolBTC,
+            "tokenB": symbolLTC,
+            "commission": 0.01,
+            "status": True,
+            "ownerAddress": owner,
+            "pairSymbol": "BTC-LTC",
+        }, [])
+        self.nodes[0].generate(1)
+
+        self.nodes[0].addpoolliquidity({
+            accountGN0: ["1@" + symbolBTC, "100@" + symbolLTC]
+        }, accountGN0, [])
+        self.nodes[0].generate(1)
+
+        # Test round up
+        new_dest = self.nodes[0].getnewaddress("", "legacy")
+        self.nodes[0].poolswap({
+                "from": accountGN0,
+                "tokenFrom": symbolLTC,
+                "amountFrom": 0.00000099,
+                "to": new_dest,
+                "tokenTo": symbolBTC
+            })
+        self.nodes[0].generate(1)
+
+        assert_equal(self.nodes[0].getaccount(new_dest, {}, True)[idBitcoin], Decimal('0.00000001'))
+
+        # Reset swap
+        self.nodes[0].invalidateblock(self.nodes[0].getblockhash(self.nodes[0].getblockcount()))
+        self.nodes[0].clearmempool()
+
+        # Test for 2 Sat round up
+        self.nodes[0].poolswap({
+                "from": accountGN0,
+                "tokenFrom": symbolLTC,
+                "amountFrom": 0.00000199,
+                "to": new_dest,
+                "tokenTo": symbolBTC
+            })
+        self.nodes[0].generate(1)
+
+        assert_equal(self.nodes[0].getaccount(new_dest, {}, True)[idBitcoin], Decimal('0.00000002'))
+
+        # Reset swap and move to Fort Canning Park Height and try swap again
+        self.nodes[0].invalidateblock(self.nodes[0].getblockhash(self.nodes[0].getblockcount()))
+        self.nodes[0].clearmempool()
+        self.nodes[0].generate(170 - self.nodes[0].getblockcount())
+
+        # Test swap now results in zero amount
+        self.nodes[0].poolswap({
+                "from": accountGN0,
+                "tokenFrom": symbolLTC,
+                "amountFrom": 0.00000099,
+                "to": new_dest,
+                "tokenTo": symbolBTC
+            })
+        self.nodes[0].generate(1)
+
+        assert(idBitcoin not in self.nodes[0].getaccount(new_dest, {}, True))
+
+        # Reset swap
+        self.nodes[0].invalidateblock(self.nodes[0].getblockhash(self.nodes[0].getblockcount()))
+        self.nodes[0].clearmempool()
+
+        # Test previous 2 Sat swap now results in 1 Sat
+        self.nodes[0].poolswap({
+                "from": accountGN0,
+                "tokenFrom": symbolLTC,
+                "amountFrom": 0.00000199,
+                "to": new_dest,
+                "tokenTo": symbolBTC
+            })
+        self.nodes[0].generate(1)
+
+        assert_equal(self.nodes[0].getaccount(new_dest, {}, True)[idBitcoin], Decimal('0.00000001'))
+
         # REVERTING:
         #========================
         print ("Reverting...")
