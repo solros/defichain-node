@@ -430,6 +430,10 @@ Res CPoolPair::Swap(CTokenAmount in, PoolPrice const & maxPrice, std::function<R
 
     CAmount result = slopeSwap(in.nValue, reserveF, reserveT, height >= Params().GetConsensus().BayfrontGardensHeight);
 
+    if (height >= Params().GetConsensus().FortCanningParkHeight && result == 1) {
+        return Res::Err("Swapping results in too small an amount");
+    }
+
     swapEvent = true; // (!!!)
 
     return onTransfer({ forward ? idTokenB : idTokenA, result });
