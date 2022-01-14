@@ -225,9 +225,11 @@ inline T InterestPerBlockCalculationV1(CAmount amount, CAmount tokenInterest, CA
 // precisoin COIN ^2
 inline base_uint<128> InterestPerBlockCalculationV2(CAmount amount, CAmount tokenInterest, CAmount schemeInterest)
 {
-    auto netInterest = (tokenInterest + schemeInterest) / 100; // in %
-    static const base_uint<128> blocksPerYear = 365 * Params().GetConsensus().blocksPerDay();
-    return base_uint<128>(netInterest) * base_uint<128>(amount) / blocksPerYear;
+    arith_uint256 netInterest = (tokenInterest + schemeInterest) / 100; // in %
+    static const arith_uint256 blocksPerYear = 365 * Params().GetConsensus().blocksPerDay();
+    arith_uint256 result = (netInterest << 64) * arith_uint256(amount) / arith_uint256(COIN) / blocksPerYear;
+
+    return (Arith256ToBaseUInt128(result));
 }
 
 static base_uint<128> InterestPerBlockCalculation(CAmount amount, CAmount tokenInterest, CAmount schemeInterest, uint32_t height)
@@ -244,8 +246,9 @@ static base_uint<128> InterestPerBlockCalculation(CAmount amount, CAmount tokenI
 static CAmount Ceil(const base_uint<128>& value, uint32_t height)
 {
     if (int(height) >= Params().GetConsensus().FortCanningHillHeight) {
-        CAmount amount = (value / base_uint<128>(COIN)).GetLow64();
-        amount += CAmount(value != base_uint<128>(amount) * COIN);
+        CAmount amount = value.GetLow64() ? 1 : 0;
+        amount += (value >> 64).GetLow64();
+
         return amount;
     }
     return value.GetLow64();
@@ -309,7 +312,16 @@ Res CLoanView::StoreInterest(uint32_t height, const CVaultId& vaultId, const std
         LogPrint(BCLog::LOAN,"%s():\n", __func__);
         rate.interestToHeight = TotalInterestCalculation(rate, height);
     }
-    rate.interestPerBlock += InterestPerBlockCalculation(loanIncreased, token->interest, scheme->rate, height);
+    if (int(height) >= Params().GetConsensus().FortCanningHillHeight)
+    {
+        CBalances amounts;
+        if (!ReadBy<CLoanView::LoanTokenAmount>(vaultId, amounts))
+            return Res::Err("Cannot find current loan amount balance");
+
+        rate.interestPerBlock = InterestPerBlockCalculation(amounts.balances[id], token->interest, scheme->rate, height);
+    }
+    else
+        rate.interestPerBlock += InterestPerBlockCalculation(loanIncreased, token->interest, scheme->rate, height);
     rate.height = height;
 
     WriteInterestRate(std::make_pair(vaultId, id), rate, height);
@@ -344,9 +356,20 @@ Res CLoanView::EraseInterest(uint32_t height, const CVaultId& vaultId, const std
                           : interestToHeight - interestDecreasedHP;
 
     rate.height = height;
-    auto interestPerBlock = InterestPerBlockCalculation(loanDecreased, token->interest, scheme->rate, height);
-    rate.interestPerBlock = rate.interestPerBlock < interestPerBlock ? 0
+    if (int(height) >= Params().GetConsensus().FortCanningHillHeight)
+    {
+        CBalances amounts;
+        if (!ReadBy<CLoanView::LoanTokenAmount>(vaultId, amounts))
+            return Res::Err("Cannot find current loan amount balance");
+
+        rate.interestPerBlock = InterestPerBlockCalculation(amounts.balances[id], token->interest, scheme->rate, height);
+    }
+    else
+    {
+        auto interestPerBlock = InterestPerBlockCalculation(loanDecreased, token->interest, scheme->rate, height);
+        rate.interestPerBlock = rate.interestPerBlock < interestPerBlock ? 0
                           : rate.interestPerBlock - interestPerBlock;
+    }
 
     WriteInterestRate(std::make_pair(vaultId, id), rate, height);
     return Res::Ok();
@@ -396,19 +419,26 @@ void CLoanView::RevertInterestRateToV1()
     }
 }
 
-void CLoanView::MigrateInterestRateToV2()
+void CLoanView::MigrateInterestRateToV2(CVaultView &view, uint32_t height)
 {
     std::vector<std::pair<std::pair<CVaultId, DCT_ID>, CInterestRate>> rates;
-    ForEach<LoanInterestByVault, std::pair<CVaultId, DCT_ID>, CInterestRate>([&](const std::pair<CVaultId, DCT_ID>& pair, CInterestRate rate) {
-        rates.emplace_back(pair, std::move(rate));
+    ForEach<LoanInterestByVault, std::pair<CVaultId, DCT_ID>, CInterestRate>([&](const std::pair<CVaultId, DCT_ID>& id, CInterestRate rate) {
+        rates.emplace_back(id, std::move(rate));
         return true;
     });
 
     for (auto it = rates.begin(); it != rates.end(); it = rates.erase(it)) {
+        auto vaultId = it->first.first;
+        auto tokenId = it->first.second;
         auto newRate = ConvertInterestRateToV2(it->second);
-        newRate.interestPerBlock *= base_uint<128>(COIN);
-        newRate.interestToHeight *= base_uint<128>(COIN);
+
+        newRate.interestPerBlock <<= 64;
+        newRate.interestToHeight <<= 64;
         WriteBy<LoanInterestByVault>(it->first, newRate);
+
+        const auto vault = view.GetVault(vaultId);
+        auto loanToken = this->GetLoanTokenByID(tokenId);
+        StoreInterest(height, vaultId, vault->schemeId, tokenId, 0);
     }
 }
 

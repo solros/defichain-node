@@ -2320,7 +2320,7 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
     if (pindex->nHeight == chainparams.GetConsensus().FortCanningHillHeight) {
         auto time = GetTimeMillis();
         LogPrintf("Interest rate migration ...\n");
-        mnview.MigrateInterestRateToV2();
+        mnview.MigrateInterestRateToV2(mnview,(uint32_t)pindex->nHeight);
         LogPrint(BCLog::BENCH, "    - Interest rate migration took: %dms\n", GetTimeMillis() - time);
     }
 

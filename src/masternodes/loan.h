@@ -336,7 +336,7 @@ public:
     void ForEachVaultInterest(std::function<bool(const CVaultId&, DCT_ID, CInterestRate)> callback, const CVaultId& vaultId = uint256(), DCT_ID id = {0});
     void ForEachVaultInterestV2(std::function<bool(const CVaultId&, DCT_ID, CInterestRateV2)> callback, const CVaultId& vaultId = uint256(), DCT_ID id = {0});
     void RevertInterestRateToV1();
-    void MigrateInterestRateToV2();
+    void MigrateInterestRateToV2(CVaultView &view, uint32_t height);
 
     Res AddLoanToken(const CVaultId& vaultId, CTokenAmount amount);
     Res SubLoanToken(const CVaultId& vaultId, CTokenAmount amount);
