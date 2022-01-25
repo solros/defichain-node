@@ -189,4 +189,19 @@ private:
                         std::function<Res(const CAttributeType&, const CAttributeValue&)> applyVariable = {}) const;
 };
 
+template<typename T>
+T GetAttributeValue(CGovView &view, const CAttributeType& key, T value) {
+    const auto attributes = view.GetAttributes();
+    if (attributes) {
+        return attributes->GetValue<T>(key, value);
+    }
+    return std::move(value);
+}
+
+template<typename T> 
+T GetTokenAttribute(CGovView& view, const DCT_ID id, const TokenKeys attr, T value) {
+    CDataStructureV0 key{AttributeTypes::Token, id.v, attr};
+    return GetAttributeValue<T>(view, key, value);
+}
+
 #endif // DEFI_MASTERNODES_GOVVARIABLES_ATTRIBUTES_H

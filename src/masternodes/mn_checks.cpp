@@ -2795,13 +2795,14 @@ public:
             return Res::Err("Cannot payback loan while any of the asset's price is invalid");
 
         auto allowDFIPayback = false;
-        std::map<CAttributeType, CAttributeValue> attrs;
         auto tokenDUSD = mnview.GetToken("DUSD");
-        auto attributes = mnview.GetAttributes();
-        if (tokenDUSD && attributes) {
-            CDataStructureV0 activeKey{AttributeTypes::Token, tokenDUSD->first.v, TokenKeys::PaybackDFI};
-            allowDFIPayback = attributes->GetValue(activeKey, false);
+        if (tokenDUSD) {
+            allowDFIPayback = GetTokenAttribute(mnview, tokenDUSD->first, TokenKeys::PaybackDFI, false);
         }
+        auto attributes = mnview.GetAttributes();
+        // if (tokenDUSD && attributes) {
+        //     allowDFIPayback = attributes->GetValue(activeKey, false);
+        // }
 
         for (const auto& kv : obj.amounts.balances)
         {
@@ -2823,11 +2824,13 @@ public:
                     return std::move(resVal);
                 }
 
-                // Apply penalty
-                CDataStructureV0 penaltyKey{AttributeTypes::Token, tokenDUSD->first.v, TokenKeys::PaybackDFIFeePCT};
-                auto penalty = COIN - attributes->GetValue(penaltyKey, COIN / 100);
-
-                dfiUSDPrice = MultiplyAmounts(*resVal.val, penalty);
+                // Apply multiplier
+                auto oracleMultiplier = GetTokenAttribute(mnview, tokenDUSD->first, 
+                    TokenKeys::PaybackDFIFeePCT, 99 * COIN / 100);
+                if (oracleMultiplier == 0) {
+                    oracleMultiplier = COIN;
+                }
+                dfiUSDPrice = MultiplyAmounts(*resVal.val, oracleMultiplier);
 
                 // Set tokenId to DUSD
                 tokenId = tokenDUSD->first;
