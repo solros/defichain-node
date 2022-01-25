@@ -2825,12 +2825,12 @@ public:
                 }
 
                 // Apply multiplier
-                auto oracleMultiplier = GetTokenAttribute(mnview, tokenDUSD->first, 
-                    TokenKeys::PaybackDFIFeePCT, 99 * COIN / 100);
-                if (oracleMultiplier == 0) {
-                    oracleMultiplier = COIN;
-                }
+                auto oracleMultiplier = COIN - GetTokenAttribute(mnview, tokenDUSD->first, 
+                    TokenKeys::PaybackDFIFeePCT, COIN / 100);
                 dfiUSDPrice = MultiplyAmounts(*resVal.val, oracleMultiplier);
+                if (dfiUSDPrice == 0) {
+                    return Res::Err("DFI-USD price cannot result in 0");
+                }
 
                 // Set tokenId to DUSD
                 tokenId = tokenDUSD->first;
