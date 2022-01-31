@@ -2571,7 +2571,7 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
             }
 
             CHistoryWriters writers{paccountHistoryDB.get(), pburnHistoryDB.get(), pvaultHistoryDB.get()};
-            const auto res = ApplyCustomTx(accountsView, view, tx, chainparams.GetConsensus(), pindex->nHeight, pindex->GetBlockTime(), i, &writers);
+            const auto res = ApplyCustomTx(accountsView, view, tx, chainparams.GetConsensus(), pindex->nHeight, pindex->GetBlockTime(), i, &writers, true);
             if (!res.ok && (res.code & CustomTxErrCodes::Fatal)) {
                 if (pindex->nHeight >= chainparams.GetConsensus().EunosHeight) {
                     return state.Invalid(ValidationInvalidReason::CONSENSUS,
@@ -3149,7 +3149,9 @@ void CChainState::ProcessLoanEvents(const CBlockIndex* pindex, CCustomCSView& ca
                 // Remove the interests from the vault and the storage respectively
                 cache.SubLoanToken(vaultId, {tokenId, tokenValue});
                 LogPrint(BCLog::LOAN,"\t\t"); /* Continued */
-                cache.EraseInterest(pindex->nHeight, vaultId, vault->schemeId, tokenId, tokenValue, subInterest);
+
+                LogPrintf("XXX ProcessLoanEvents vault %s\n", vaultId.ToString());
+                cache.EraseInterest(pindex->nHeight, vaultId, vault->schemeId, tokenId, tokenValue, subInterest, true);
                 // Putting this back in now for auction calculations.
                 loan.second += subInterest;
             }
@@ -3256,7 +3258,8 @@ void CChainState::ProcessLoanEvents(const CBlockIndex* pindex, CCustomCSView& ca
             } else {
                 // we should return loan including interest
                 view.AddLoanToken(vaultId, batch->loanAmount);
-                view.StoreInterest(pindex->nHeight, vaultId, vault->schemeId, batch->loanAmount.nTokenId, batch->loanAmount.nValue);
+                LogPrintf("XXX ProcessLoanEvents vault %s\n", vaultId.ToString());
+                view.StoreInterest(pindex->nHeight, vaultId, vault->schemeId, batch->loanAmount.nTokenId, batch->loanAmount.nValue, true);
                 for (const auto& col : batch->collaterals.balances) {
                     auto tokenId = col.first;
                     auto tokenAmount = col.second;

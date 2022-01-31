@@ -267,7 +267,7 @@ void CLoanView::WriteInterestRate(const std::pair<CVaultId, DCT_ID>& pair, const
         WriteBy<LoanInterestByVault>(pair, ConvertInterestRateToV1(rate));
 }
 
-Res CLoanView::StoreInterest(uint32_t height, const CVaultId& vaultId, const std::string& loanSchemeID, DCT_ID id, CAmount loanIncreased)
+Res CLoanView::StoreInterest(uint32_t height, const CVaultId& vaultId, const std::string& loanSchemeID, DCT_ID id, CAmount loanIncreased, bool connectBlock)
 {
     auto scheme = GetLoanScheme(loanSchemeID);
     if (!scheme)
@@ -296,9 +296,13 @@ Res CLoanView::StoreInterest(uint32_t height, const CVaultId& vaultId, const std
 
     } else if (int(height) >= Params().GetConsensus().FortCanningMuseumHeight) {
         CAmount interestPerBlock = rate.interestPerBlock.GetLow64();
-        interestPerBlock += std::ceil(InterestPerBlockCalculationV1<float>(loanIncreased, token->interest, scheme->rate));
+        const auto retAmount = std::ceil(InterestPerBlockCalculationV1<float>(loanIncreased, token->interest, scheme->rate));
+        if (connectBlock)
+            LogPrintf("XXX %s: rate.interestPerBlock before %d InterestPerBlockFloat %f\n", __func__, rate.interestPerBlock.GetLow64(), retAmount);
+        interestPerBlock += retAmount;
         rate.interestPerBlock = interestPerBlock;
-
+        if (connectBlock)
+            LogPrintf("XXX %s: interestPerBlock after %d\n", __func__, rate.interestPerBlock.GetLow64());
     } else
         rate.interestPerBlock += InterestPerBlockCalculationV1<CAmount>(loanIncreased, token->interest, scheme->rate);
 
@@ -308,7 +312,7 @@ Res CLoanView::StoreInterest(uint32_t height, const CVaultId& vaultId, const std
     return Res::Ok();
 }
 
-Res CLoanView::EraseInterest(uint32_t height, const CVaultId& vaultId, const std::string& loanSchemeID, DCT_ID id, CAmount loanDecreased, CAmount interestDecreased)
+Res CLoanView::EraseInterest(uint32_t height, const CVaultId& vaultId, const std::string& loanSchemeID, DCT_ID id, CAmount loanDecreased, CAmount interestDecreased, bool connectBlock)
 {
     auto scheme = GetLoanScheme(loanSchemeID);
     if (!scheme)
@@ -344,9 +348,13 @@ Res CLoanView::EraseInterest(uint32_t height, const CVaultId& vaultId, const std
 
     } else if (int(height) >= Params().GetConsensus().FortCanningMuseumHeight) {
         CAmount interestPerBlock = rate.interestPerBlock.GetLow64();
-        CAmount newInterestPerBlock = std::ceil(InterestPerBlockCalculationV1<float>(loanDecreased, token->interest, scheme->rate));
+        const auto retAmount = std::ceil(InterestPerBlockCalculationV1<float>(loanDecreased, token->interest, scheme->rate));
+        if (connectBlock)
+            LogPrintf("XXX %s: rate.interestPerBlock before %d InterestPerBlockFloat %f\n", __func__, rate.interestPerBlock.GetLow64(), retAmount);
+        CAmount newInterestPerBlock = retAmount;
         rate.interestPerBlock = std::max(CAmount{0}, interestPerBlock - newInterestPerBlock);
-
+        if (connectBlock)
+            LogPrintf("XXX %s: interestPerBlock after %d\n", __func__, rate.interestPerBlock.GetLow64());
     } else {
         auto interestPerBlock = InterestPerBlockCalculationV1<CAmount>(loanDecreased, token->interest, scheme->rate);
         rate.interestPerBlock = rate.interestPerBlock < interestPerBlock ? 0

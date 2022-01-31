@@ -865,15 +865,17 @@ public:
 class CCustomTxApplyVisitor : public CCustomTxVisitor
 {
     uint64_t time;
+    bool connectBlock;
 public:
     CCustomTxApplyVisitor(const CTransaction& tx,
                           uint32_t height,
                           const CCoinsViewCache& coins,
                           CCustomCSView& mnview,
                           const Consensus::Params& consensus,
-                          uint64_t time)
+                          uint64_t time,
+                          bool connectBlock)
 
-        : CCustomTxVisitor(tx, height, coins, mnview, consensus), time(time) {}
+        : CCustomTxVisitor(tx, height, coins, mnview, consensus), time(time), connectBlock(connectBlock) {}
 
     Res operator()(const CCreateMasterNodeMessage& obj) const {
         auto res = CheckMasternodeCreationTx();
@@ -2690,6 +2692,9 @@ public:
         if (!collaterals)
             return Res::Err("Vault with id %s has no collaterals", obj.vaultId.GetHex());
 
+        if (connectBlock)
+            LogPrintf("XXX TakeLoan: %s\n", tx.GetHash().ToString());
+
         uint64_t totalLoansActivePrice = 0, totalLoansNextPrice = 0;
         for (const auto& kv : obj.amounts.balances)
         {
@@ -2705,7 +2710,7 @@ public:
             if (!res)
                 return res;
 
-            res = mnview.StoreInterest(height, obj.vaultId, vault->schemeId, tokenId, kv.second);
+            res = mnview.StoreInterest(height, obj.vaultId, vault->schemeId, tokenId, kv.second, connectBlock);
             if (!res)
                 return res;
 
@@ -2806,6 +2811,9 @@ public:
             allowDFIPayback = attributes->GetValue(activeKey, false);
         }
 
+        if (connectBlock)
+            LogPrintf("XXX PaybackLoan: %s\n", tx.GetHash().ToString());
+
         for (const auto& kv : obj.amounts.balances)
         {
             DCT_ID tokenId = kv.first;
@@ -2874,7 +2882,7 @@ public:
                 return res;
 
             LogPrint(BCLog::LOAN,"CLoanPaybackLoanMessage()->%s->", loanToken->symbol); /* Continued */
-            res = mnview.EraseInterest(height, obj.vaultId, vault->schemeId, tokenId, subLoan, subInterest);
+            res = mnview.EraseInterest(height, obj.vaultId, vault->schemeId, tokenId, subLoan, subInterest, connectBlock);
             if (!res)
                 return res;
 
@@ -3316,12 +3324,12 @@ bool IsDisabledTx(uint32_t height, const CTransaction& tx, const Consensus::Para
     return IsDisabledTx(height, txType, consensus);
 }
 
-Res CustomTxVisit(CCustomCSView& mnview, const CCoinsViewCache& coins, const CTransaction& tx, uint32_t height, const Consensus::Params& consensus, const CCustomTxMessage& txMessage, uint64_t time) {
+Res CustomTxVisit(CCustomCSView& mnview, const CCoinsViewCache& coins, const CTransaction& tx, uint32_t height, const Consensus::Params& consensus, const CCustomTxMessage& txMessage, uint64_t time, bool connectBlock) {
     if (IsDisabledTx(height, tx, consensus)) {
         return Res::ErrCode(CustomTxErrCodes::Fatal, "Disabled custom transaction");
     }
     try {
-        return boost::apply_visitor(CCustomTxApplyVisitor(tx, height, coins, mnview, consensus, time), txMessage);
+        return boost::apply_visitor(CCustomTxApplyVisitor(tx, height, coins, mnview, consensus, time, connectBlock), txMessage);
     } catch (const std::exception& e) {
         return Res::Err(e.what());
     } catch (...) {
@@ -3433,7 +3441,7 @@ void PopulateVaultHistoryData(CHistoryWriters* writers, CAccountsHistoryWriter& 
     }
 }
 
-Res ApplyCustomTx(CCustomCSView& mnview, const CCoinsViewCache& coins, const CTransaction& tx, const Consensus::Params& consensus, uint32_t height, uint64_t time, uint32_t txn, CHistoryWriters* writers) {
+Res ApplyCustomTx(CCustomCSView& mnview, const CCoinsViewCache& coins, const CTransaction& tx, const Consensus::Params& consensus, uint32_t height, uint64_t time, uint32_t txn, CHistoryWriters* writers, bool connectBlock) {
     auto res = Res::Ok();
     if (tx.IsCoinBase() && height > 0) { // genesis contains custom coinbase txs
         return res;
@@ -3455,7 +3463,7 @@ Res ApplyCustomTx(CCustomCSView& mnview, const CCoinsViewCache& coins, const CTr
         if (pvaultHistoryDB && writers) {
            PopulateVaultHistoryData(writers, view, txMessage, txType, height, txn, tx.GetHash());
         }
-        res = CustomTxVisit(view, coins, tx, height, consensus, txMessage, time);
+        res = CustomTxVisit(view, coins, tx, height, consensus, txMessage, time, connectBlock);
 
         // Track burn fee
         if (txType == CustomTxType::CreateToken || txType == CustomTxType::CreateMasternode) {
