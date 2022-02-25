@@ -356,6 +356,7 @@ public:
     std::optional<CBalances> GetLoanTokens(const CVaultId& vaultId);
 
     Res SetLoanLiquidationPenalty(CAmount penalty);
+    Res EraseLoanLiquidationPenalty();
     CAmount GetLoanLiquidationPenalty();
 
     [[nodiscard]] virtual std::optional<CLoanSetLoanTokenImplementation> GetLoanTokenFromAttributes(const DCT_ID& id) const = 0;
