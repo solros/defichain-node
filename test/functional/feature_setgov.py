@@ -493,21 +493,28 @@ class GovsetTest (DefiTestFramework):
                                     'fixedIntervalPriceId': "TSLA/USD",
                                     'mintable': False,
                                     'interest': 5})
+        self.nodes[0].setloantoken({
+                                    'symbol': 'TSLA2',
+                                    'name': "TSLA2",
+                                    'fixedIntervalPriceId': "TSLA/USD",
+                                    'mintable': False,
+                                    'interest': 5})                                  
         self.nodes[0].generate(1)
 
         # Test setting of new Gov var
+        self.nodes[0].setgov({"ATTRIBUTES":{'v0/token/6/payback_dfi':'false'}})
         self.nodes[0].setgov({"ATTRIBUTES":{'v0/token/5/payback_dfi':'true'}})
         self.nodes[0].generate(1)
-        assert_equal(self.nodes[0].getgov('ATTRIBUTES')['ATTRIBUTES'], {'v0/token/5/payback_dfi': 'true'})
+        assert_equal(self.nodes[0].getgov('ATTRIBUTES')['ATTRIBUTES'], {'v0/token/5/payback_dfi': 'true', 'v0/token/6/payback_dfi':'false'})
         self.nodes[0].setgov({"ATTRIBUTES":{'v0/token/5/payback_dfi_fee_pct':'0.05'}})
         self.nodes[0].generate(1)
-        assert_equal(self.nodes[0].getgov('ATTRIBUTES')['ATTRIBUTES'], {'v0/token/5/payback_dfi': 'true', 'v0/token/5/payback_dfi_fee_pct': '0.05'})
-        assert_equal(self.nodes[0].listgovs()[8][0]['ATTRIBUTES'], {'v0/token/5/payback_dfi': 'true', 'v0/token/5/payback_dfi_fee_pct': '0.05'})
+        assert_equal(self.nodes[0].getgov('ATTRIBUTES')['ATTRIBUTES'], {'v0/token/5/payback_dfi': 'true', 'v0/token/5/payback_dfi_fee_pct': '0.05', 'v0/token/6/payback_dfi':'false'})
+        assert_equal(self.nodes[0].listgovs()[8][0]['ATTRIBUTES'], {'v0/token/5/payback_dfi': 'true', 'v0/token/5/payback_dfi_fee_pct': '0.05', 'v0/token/6/payback_dfi':'false'})
 
         # Test setting multiple ATTRIBUTES
         self.nodes[0].setgov({"ATTRIBUTES":{'v0/token/5/payback_dfi':'false','v0/token/5/payback_dfi_fee_pct':'0.02378'}})
         self.nodes[0].generate(1)
-        assert_equal(self.nodes[0].getgov('ATTRIBUTES')['ATTRIBUTES'], {'v0/token/5/payback_dfi': 'false', 'v0/token/5/payback_dfi_fee_pct': '0.02378'})
+        assert_equal(self.nodes[0].getgov('ATTRIBUTES')['ATTRIBUTES'], {'v0/token/5/payback_dfi': 'false', 'v0/token/5/payback_dfi_fee_pct': '0.02378', 'v0/token/6/payback_dfi':'false'})
 
         # Test pending change
         activate = self.nodes[0].getblockcount() + 10
@@ -515,21 +522,21 @@ class GovsetTest (DefiTestFramework):
         self.nodes[0].generate(9)
 
         # No change yet
-        assert_equal(self.nodes[0].getgov('ATTRIBUTES')['ATTRIBUTES'], {'v0/token/5/payback_dfi': 'false', 'v0/token/5/payback_dfi_fee_pct': '0.02378'})
+        assert_equal(self.nodes[0].getgov('ATTRIBUTES')['ATTRIBUTES'], {'v0/token/5/payback_dfi': 'false', 'v0/token/5/payback_dfi_fee_pct': '0.02378', 'v0/token/6/payback_dfi':'false'})
 
         # Pending change present
-        assert_equal(self.nodes[0].listgovs()[8][1][str(activate)], {'v0/token/5/payback_dfi': 'true', 'v0/token/5/payback_dfi_fee_pct': '0.01'})
+        assert_equal(self.nodes[0].listgovs()[8][1][str(activate)], {'v0/token/5/payback_dfi': 'true', 'v0/token/5/payback_dfi_fee_pct': '0.01', 'v0/token/6/payback_dfi':'false'})
 
         # Check pending change applied
         self.nodes[0].generate(1)
-        assert_equal(self.nodes[0].getgov('ATTRIBUTES')['ATTRIBUTES'], {'v0/token/5/payback_dfi': 'true', 'v0/token/5/payback_dfi_fee_pct': '0.01'})
-        assert_equal(self.nodes[0].listgovs()[8][0]['ATTRIBUTES'], {'v0/token/5/payback_dfi': 'true', 'v0/token/5/payback_dfi_fee_pct': '0.01'})
+        assert_equal(self.nodes[0].getgov('ATTRIBUTES')['ATTRIBUTES'], {'v0/token/5/payback_dfi': 'true', 'v0/token/5/payback_dfi_fee_pct': '0.01', 'v0/token/6/payback_dfi':'false'})
+        assert_equal(self.nodes[0].listgovs()[8][0]['ATTRIBUTES'], {'v0/token/5/payback_dfi': 'true', 'v0/token/5/payback_dfi_fee_pct': '0.01', 'v0/token/6/payback_dfi':'false'})
 
         # Test params
         self.nodes[0].setgov({"ATTRIBUTES":{'v0/params/dfip2201/active':'true','v0/params/dfip2201/minswap':'0.001','v0/params/dfip2201/premium':'0.025'}})
         self.nodes[0].generate(1)
-        assert_equal(self.nodes[0].getgov('ATTRIBUTES')['ATTRIBUTES'], {'v0/params/dfip2201/active': 'true', 'v0/params/dfip2201/premium': '0.025', 'v0/params/dfip2201/minswap': '0.001', 'v0/token/5/payback_dfi': 'true', 'v0/token/5/payback_dfi_fee_pct': '0.01'})
-        assert_equal(self.nodes[0].listgovs()[8][0]['ATTRIBUTES'], {'v0/params/dfip2201/active': 'true', 'v0/params/dfip2201/premium': '0.025', 'v0/params/dfip2201/minswap': '0.001', 'v0/token/5/payback_dfi': 'true', 'v0/token/5/payback_dfi_fee_pct': '0.01'})
+        assert_equal(self.nodes[0].getgov('ATTRIBUTES')['ATTRIBUTES'], {'v0/params/dfip2201/active': 'true', 'v0/params/dfip2201/premium': '0.025', 'v0/params/dfip2201/minswap': '0.001', 'v0/token/5/payback_dfi': 'true', 'v0/token/5/payback_dfi_fee_pct': '0.01', 'v0/token/6/payback_dfi':'false'})
+        assert_equal(self.nodes[0].listgovs()[8][0]['ATTRIBUTES'], {'v0/params/dfip2201/active': 'true', 'v0/params/dfip2201/premium': '0.025', 'v0/params/dfip2201/minswap': '0.001', 'v0/token/5/payback_dfi': 'true', 'v0/token/5/payback_dfi_fee_pct': '0.01', 'v0/token/6/payback_dfi':'false'})
 
         # Move to FCR fork
         self.nodes[0].generate(1150 - self.nodes[0].getblockcount())
