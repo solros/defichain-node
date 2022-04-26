@@ -14,6 +14,7 @@
 #include <init.h>
 #include <interfaces/chain.h>
 #include <noui.h>
+#include <rpc/libain.hpp>
 #include <shutdown.h>
 #include <ui_interface.h>
 #include <util/strencodings.h>
@@ -64,6 +65,8 @@ static bool AppInit(int argc, char* argv[])
     bool fRet = false;
 
     util::ThreadRename("init");
+
+    show_block();
 
     //
     // Parameters

@@ -28,6 +28,7 @@ DEFI_INCLUDES += -I$(srcdir)/secp256k1/include
 DEFI_INCLUDES += $(UNIVALUE_CFLAGS)
 DEFI_INCLUDES += $(SPV_INCLUDES)
 
+LIBAIN_GRPC=libain_grpc.a
 LIBDEFI_SERVER=libdefi_server.a
 LIBDEFI_COMMON=libdefi_common.a
 LIBDEFI_CONSENSUS=libdefi_consensus.a
@@ -686,10 +687,10 @@ nodist_libdefi_util_a_SOURCES = $(srcdir)/obj/build.h
 #
 
 # defid binary #
-defid_SOURCES = defid.cpp
+defid_SOURCES = defid.cpp rpc/libain.cpp rpc/libain_wrapper.cpp
 defid_CPPFLAGS = $(AM_CPPFLAGS) $(DEFI_INCLUDES)
 defid_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-defid_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
+defid_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) -lain_grpc -ldl
 
 if TARGET_WINDOWS
 defid_SOURCES += defid-res.rc
