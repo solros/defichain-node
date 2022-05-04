@@ -1536,8 +1536,9 @@ public:
                     futuresValues.source.nTokenId == obj.source.nTokenId &&
                     futuresValues.destination == obj.destination) {
                     userFuturesValues[{key.height, key.owner, key.txn}] = futuresValues;
-                    return true;
                 }
+                
+                return true;
             }, {obj.owner, height, std::numeric_limits<uint32_t>::max()});
 
             CTokenAmount totalFutures{};
