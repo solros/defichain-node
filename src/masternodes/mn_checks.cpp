@@ -1532,7 +1532,8 @@ public:
             std::map<CFuturesUserHeightPrefixKey, CFuturesUserValue> userFuturesValues;
 
             mnview.ForEachFuturesUserValuesByOwner([&](const CFuturesUserOwnerPrefixKey& key, const CFuturesUserValue& futuresValues) {
-                if (futuresValues.source.nTokenId == obj.source.nTokenId &&
+                if (key.owner == obj.owner &&
+                    futuresValues.source.nTokenId == obj.source.nTokenId &&
                     futuresValues.destination == obj.destination) {
                     userFuturesValues[{key.height, key.owner, key.txn}] = futuresValues;
                     return true;
