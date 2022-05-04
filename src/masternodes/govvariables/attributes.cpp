@@ -377,7 +377,7 @@ Res ATTRIBUTES::RefundFuturesContracts(CCustomCSView &mnview, const uint32_t hei
 
     std::map<CFuturesUserHeightPrefixKey, CFuturesUserValue> userFuturesValues;
 
-    mnview.ForEachFuturesUserValuesByHeight([&](const CFuturesUserHeightPrefixKey& key, const CFuturesUserValue& futuresValues) {
+    mnview.ForEachFuturesUserValues([&](const CFuturesUserHeightPrefixKey& key, const CFuturesUserValue& futuresValues) {
         if (tokenID != std::numeric_limits<uint32_t>::max()) {
             if (futuresValues.source.nTokenId.v == tokenID || futuresValues.destination == tokenID) {
                 userFuturesValues[key] = futuresValues;

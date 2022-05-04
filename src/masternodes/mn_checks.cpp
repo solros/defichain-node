@@ -1531,7 +1531,7 @@ public:
         if (obj.withdraw) {
             std::map<CFuturesUserHeightPrefixKey, CFuturesUserValue> userFuturesValues;
 
-            mnview.ForEachFuturesUserValuesByOwner([&](const CFuturesUserOwnerPrefixKey& key, const CFuturesUserValue& futuresValues) {
+            mnview.ForEachFuturesUserValuesWithOwner([&](const CFuturesUserOwnerPrefixKey& key, const CFuturesUserValue& futuresValues) {
                 if (key.owner == obj.owner &&
                     futuresValues.source.nTokenId == obj.source.nTokenId &&
                     futuresValues.destination == obj.destination) {

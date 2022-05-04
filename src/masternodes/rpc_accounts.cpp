@@ -2235,7 +2235,7 @@ UniValue listpendingfutureswaps(const JSONRPCRequest& request) {
 
     LOCK(cs_main);
 
-    pcustomcsview->ForEachFuturesUserValuesByHeight([&](const CFuturesUserHeightPrefixKey& key, const CFuturesUserValue& futuresValues){
+    pcustomcsview->ForEachFuturesUserValues([&](const CFuturesUserHeightPrefixKey& key, const CFuturesUserValue& futuresValues){
         CTxDestination dest;
         ExtractDestination(key.owner, dest);
         if (!IsValidDestination(dest)) {
@@ -2297,7 +2297,7 @@ UniValue getpendingfutureswaps(const JSONRPCRequest& request) {
     LOCK(cs_main);
 
     std::vector<CFuturesUserValue> storedFutures;
-    pcustomcsview->ForEachFuturesUserValuesByOwner([&](const CFuturesUserOwnerPrefixKey& key, const CFuturesUserValue& futuresValues) {
+    pcustomcsview->ForEachFuturesUserValuesWithOwner([&](const CFuturesUserOwnerPrefixKey& key, const CFuturesUserValue& futuresValues) {
         storedFutures.push_back(futuresValues);
         return true;
     }, {owner, static_cast<uint32_t>(::ChainActive().Height()), std::numeric_limits<uint32_t>::max()});
