@@ -1531,16 +1531,13 @@ public:
         if (obj.withdraw) {
             std::map<CFuturesUserHeightPrefixKey, CFuturesUserValue> userFuturesValues;
 
-            mnview.ForEachFuturesUserValues([&](const CFuturesUserHeightPrefixKey& key, const CFuturesUserValue& futuresValues) {
-                if (key.owner != obj.owner) {
-                    return false;
-                }
-                else if (futuresValues.source.nTokenId == obj.source.nTokenId &&
+            mnview.ForEachFuturesUserValuesByOwner([&](const CFuturesUserOwnerPrefixKey& key, const CFuturesUserValue& futuresValues) {
+                if (futuresValues.source.nTokenId == obj.source.nTokenId &&
                     futuresValues.destination == obj.destination) {
-                    userFuturesValues[key] = futuresValues;
+                    userFuturesValues[{key.height, key.owner, key.txn}] = futuresValues;
+                    return true;
                 }
-                return true;
-            }, {height, obj.owner, std::numeric_limits<uint32_t>::max()});
+            }, {obj.owner, height, std::numeric_limits<uint32_t>::max()});
 
             CTokenAmount totalFutures{};
             totalFutures.nTokenId = obj.source.nTokenId;

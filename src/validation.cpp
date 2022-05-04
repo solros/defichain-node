@@ -3351,7 +3351,7 @@ void CChainState::ProcessFutures(const CBlockIndex* pindex, CCustomCSView& cache
 
     auto txn = std::numeric_limits<uint32_t>::max();
 
-    cache.ForEachFuturesUserValues([&](const CFuturesUserHeightPrefixKey& key, const CFuturesUserValue& futuresValues){
+    cache.ForEachFuturesUserValuesByHeight([&](const CFuturesUserHeightPrefixKey& key, const CFuturesUserValue& futuresValues){
 
         CHistoryWriters writers{paccountHistoryDB.get(), nullptr, nullptr};
         CAccountsHistoryWriter view(cache, pindex->nHeight, txn--, {}, uint8_t(CustomTxType::FutureSwapExecution), &writers);

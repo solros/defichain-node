@@ -144,16 +144,18 @@ Res CAccountsView::StoreFuturesUserValues(const CFuturesUserHeightPrefixKey& key
     return Res::Ok();
 }
 
-void CAccountsView::ForEachFuturesUserValues(std::function<bool(const CFuturesUserHeightPrefixKey&, const CFuturesUserValue&)> callback, const CFuturesUserHeightPrefixKey& start)
-{
-    if (start.owner.empty()) {
-        ForEach<ByFutureSwapHeightKey, CFuturesUserHeightPrefixKey, CFuturesUserValue>(callback, start);
-    } else {
-        ForEach<ByFutureSwapOwnerKey, CFuturesUserOwnerPrefixKey, NonSerializedEmptyValue>([&](const CFuturesUserOwnerPrefixKey& ownerKey, const NonSerializedEmptyValue&) {
-            CFuturesUserHeightPrefixKey key = TranslateKeyToHeightPrefix(ownerKey);
-            return callback(key, *GetFuturesUserValues(key));
-        }, TranslateKeyToOwnerPrefix(start));
-    }
+void CAccountsView::ForEachFuturesUserValuesByHeight(std::function<bool(const CFuturesUserHeightPrefixKey&, const CFuturesUserValue&)> callback, const CFuturesUserHeightPrefixKey& start) {
+    ForEach<ByFutureSwapHeightKey, CFuturesUserHeightPrefixKey, CFuturesUserValue>(callback, start);
+}
+
+void CAccountsView::ForEachFuturesUserValuesByOwner(std::function<bool(const CFuturesUserOwnerPrefixKey&, const CFuturesUserValue&)> callback, const CFuturesUserOwnerPrefixKey& start) {
+    ForEach<ByFutureSwapOwnerKey, CFuturesUserOwnerPrefixKey, NonSerializedEmptyValue>([&](const CFuturesUserOwnerPrefixKey& ownerKey, const NonSerializedEmptyValue&) {
+        if (ownerKey.owner != start.owner)
+            return false;
+        
+        CFuturesUserHeightPrefixKey heightKey = TranslateKeyToHeightPrefix(ownerKey);
+        return callback(ownerKey, *GetFuturesUserValues(heightKey));
+    }, start);
 }
 
 Res CAccountsView::EraseFuturesUserValues(const CFuturesUserHeightPrefixKey& key)
