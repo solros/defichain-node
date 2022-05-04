@@ -4,15 +4,6 @@
 
 #include <masternodes/accounts.h>
 
-static CFuturesUserHeightPrefixKey TranslateKeyToHeightPrefix(CFuturesUserOwnerPrefixKey const & key)
-{
-    return {key.height, key.owner, key.txn};
-}
-
-static CFuturesUserOwnerPrefixKey TranslateKeyToOwnerPrefix(CFuturesUserHeightPrefixKey const & key)
-{
-    return {key.owner, key.height, key.txn};
-}
 
 void CAccountsView::ForEachBalance(std::function<bool(CScript const &, CTokenAmount const &)> callback, BalanceKey const & start)
 {
@@ -109,6 +100,16 @@ uint32_t CAccountsView::GetBalancesHeight(CScript const & owner)
     return ok ? height : 0;
 }
 
+static CFuturesUserHeightPrefixKey TranslateFuturesKeyToHeightPrefix(CFuturesUserOwnerPrefixKey const & key)
+{
+    return {key.height, key.owner, key.txn};
+}
+
+static CFuturesUserOwnerPrefixKey TranslateFuturesKeyToOwnerPrefix(CFuturesUserHeightPrefixKey const & key)
+{
+    return {key.owner, key.height, key.txn};
+}
+
 void CAccountsView::CreateFuturesMultiIndexIfNeeded()
 {
     CFuturesUserOwnerPrefixKey anyOwnerKey{{}, ~0u, ~0u};
@@ -123,7 +124,7 @@ void CAccountsView::CreateFuturesMultiIndexIfNeeded()
     CFuturesUserHeightPrefixKey startKey{~0u, {}, ~0u};
     auto it = LowerBound<ByFutureSwapHeightKey>(startKey);
     for (; it.Valid(); it.Next()) {
-        WriteBy<ByFutureSwapOwnerKey>(TranslateKeyToOwnerPrefix(it.Key()), NON_SERIALIZED_EMPTY_VALUE);
+        WriteBy<ByFutureSwapOwnerKey>(TranslateFuturesKeyToOwnerPrefix(it.Key()), NON_SERIALIZED_EMPTY_VALUE);
     }
 
     // Flush the cache
@@ -137,7 +138,7 @@ Res CAccountsView::StoreFuturesUserValues(const CFuturesUserHeightPrefixKey& key
     if (!WriteBy<ByFutureSwapHeightKey>(key, futures)) {
         return Res::Err("Failed to store futures");
     }
-    if (!WriteBy<ByFutureSwapOwnerKey>(TranslateKeyToOwnerPrefix(key), NON_SERIALIZED_EMPTY_VALUE)) {
+    if (!WriteBy<ByFutureSwapOwnerKey>(TranslateFuturesKeyToOwnerPrefix(key), NON_SERIALIZED_EMPTY_VALUE)) {
         return Res::Err("Failed to store futures by owner key");
     }
 
@@ -155,7 +156,7 @@ void CAccountsView::ForEachFuturesUserValuesWithOwner(std::function<bool(const C
         if (start.owner != ownerKey.owner)
             return false;
         
-        CFuturesUserHeightPrefixKey heightKey = TranslateKeyToHeightPrefix(ownerKey);
+        CFuturesUserHeightPrefixKey heightKey = TranslateFuturesKeyToHeightPrefix(ownerKey);
         return callback(ownerKey, *GetFuturesUserValues(heightKey));
     }, start);
 }
@@ -165,7 +166,7 @@ Res CAccountsView::EraseFuturesUserValues(const CFuturesUserHeightPrefixKey& key
     if (!EraseBy<ByFutureSwapHeightKey>(key)) {
         return Res::Err("Failed to erase futures");
     }
-    if (!EraseBy<ByFutureSwapOwnerKey>(TranslateKeyToOwnerPrefix(key))) {
+    if (!EraseBy<ByFutureSwapOwnerKey>(TranslateFuturesKeyToOwnerPrefix(key))) {
         return Res::Err("Failed to erase futures by owner key");
     }
 
