@@ -2264,7 +2264,45 @@ UniValue listpendingfutureswaps(const JSONRPCRequest& request) {
         listFutures.push_back(value);
 
         return true;
-    }, {std::numeric_limits<uint32_t>::max(), {}, std::numeric_limits<uint32_t>::max()});
+    });
+
+    return listFutures;
+}
+
+
+UniValue listfsownerkeyntries(const JSONRPCRequest& request) {
+    RPCHelpMan{"listfsownerkeyntries",
+               "Get all pending futures.\n",
+               {},
+               RPCResult{
+                       "\"json\"          (string) array containing json-objects\n"
+
+               },
+               RPCExamples{
+                       HelpExampleCli("listfsownerkeyntries", "")
+               },
+    }.Check(request);
+
+    UniValue listFutures{UniValue::VARR};
+
+    LOCK(cs_main);
+
+    pcustomcsview->ForEachFuturesOwnerKeys([&](const CFuturesUserOwnerPrefixKey& key, const NonSerializedEmptyValue&){
+        CTxDestination dest;
+        ExtractDestination(key.owner, dest);
+        if (!IsValidDestination(dest)) {
+            return true;
+        }
+
+        UniValue value{UniValue::VOBJ};
+        value.pushKV("owner", EncodeDestination(dest));
+        value.pushKV("height", static_cast<uint64_t>(key.height));
+        value.pushKV("txn", static_cast<uint64_t>(key.txn));
+
+        listFutures.push_back(value);
+
+        return true;
+    });
 
     return listFutures;
 }
@@ -2298,11 +2336,9 @@ UniValue getpendingfutureswaps(const JSONRPCRequest& request) {
 
     std::vector<CFuturesUserValue> storedFutures;
     pcustomcsview->ForEachFuturesUserValuesWithOwner([&](const CFuturesUserOwnerPrefixKey& key, const CFuturesUserValue& futuresValues) {
-        
-        if (key.owner == owner) {
-            storedFutures.push_back(futuresValues);
-        }
-        
+
+        storedFutures.push_back(futuresValues);
+
         return true;
     }, {owner, static_cast<uint32_t>(::ChainActive().Height()), std::numeric_limits<uint32_t>::max()});
 
@@ -2359,6 +2395,7 @@ static const CRPCCommand commands[] =
     {"accounts",    "withdrawfutureswap",    &withdrawfutureswap,    {"address", "amount", "destination", "inputs"}},
     {"accounts",    "listpendingfutureswaps",    &listpendingfutureswaps,    {}},
     {"accounts",    "getpendingfutureswaps",     &getpendingfutureswaps,     {"address"}},
+    {"accounts",    "listfsownerkeyntries",      &listfsownerkeyntries,      {}},
 };
 
 void RegisterAccountsRPCCommands(CRPCTable& tableRPC) {

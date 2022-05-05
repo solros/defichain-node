@@ -150,6 +150,10 @@ void CAccountsView::ForEachFuturesUserValues(std::function<bool(const CFuturesUs
     ForEach<ByFutureSwapHeightKey, CFuturesUserHeightPrefixKey, CFuturesUserValue>(callback, start);
 }
 
+void CAccountsView::ForEachFuturesOwnerKeys(std::function<bool(const CFuturesUserOwnerPrefixKey&, const NonSerializedEmptyValue&)> callback, const CFuturesUserOwnerPrefixKey& start) {
+    ForEach<ByFutureSwapOwnerKey, CFuturesUserOwnerPrefixKey, NonSerializedEmptyValue>(callback, start);
+}
+
 void CAccountsView::ForEachFuturesUserValuesWithOwner(std::function<bool(const CFuturesUserOwnerPrefixKey&, const CFuturesUserValue&)> callback, const CFuturesUserOwnerPrefixKey& start) 
 {
     ForEach<ByFutureSwapOwnerKey, CFuturesUserOwnerPrefixKey, NonSerializedEmptyValue>([&](const CFuturesUserOwnerPrefixKey& ownerKey, const NonSerializedEmptyValue&) {
