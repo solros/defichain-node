@@ -1666,6 +1666,9 @@ DisconnectResult CChainState::DisconnectBlock(const CBlock& block, const CBlockI
     // special case: possible undo (first) of custom 'complex changes' for the whole block (expired orders and/or prices)
     mnview.OnUndoTx(uint256(), (uint32_t) pindex->nHeight); // undo for "zero hash"
 
+    // Undo for future swap multi index, can be removed after reindex update.
+    mnview.OnUndoTx(uint256S(std::string(64, '1')), static_cast<uint32_t>(pindex->nHeight)); // undo for "zero hash"
+
     if (pindex->nHeight >= Params().GetConsensus().FortCanningHeight) {
         // erase auction fee history
         pburnHistoryDB->EraseAccountHistory({Params().GetConsensus().burnAddress, uint32_t(pindex->nHeight), ~0u});
@@ -2845,15 +2848,8 @@ bool CChainState::ConnectBlock(const CBlock& block, CValidationState& state, CBl
             cache.EraseStoredVariables(static_cast<uint32_t>(pindex->nHeight));
         }
 
-        // construct undo
-        auto& flushable = cache.GetStorage();
-        auto undo = CUndo::Construct(mnview.GetStorage(), flushable.GetRaw());
-        // flush changes to underlying view
+        mnview.AddUndo(cache, {}, pindex->nHeight);
         cache.Flush();
-        // write undo
-        if (!undo.before.empty()) {
-            mnview.SetUndo(UndoKey{static_cast<uint32_t>(pindex->nHeight), uint256() }, undo); // "zero hash"
-        }
     }
 
     // Write any UTXO burns

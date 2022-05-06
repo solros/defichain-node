@@ -78,6 +78,8 @@ struct CFuturesUserValue {
     }
 };
 
+CFuturesUserOwnerPrefixKey TranslateFuturesKeyToOwnerPrefix(CFuturesUserHeightPrefixKey const & key);
+
 class CAccountsView : public virtual CStorageView
 {
 public:
@@ -94,11 +96,11 @@ public:
     uint32_t GetBalancesHeight(CScript const & owner);
     Res UpdateBalancesHeight(CScript const & owner, uint32_t height);
 
-    void CreateFuturesMultiIndexIfNeeded();
     Res StoreFuturesUserValues(const CFuturesUserHeightPrefixKey& key, const CFuturesUserValue& futures);
+    Res StoreFuturesOwner(const CFuturesUserOwnerPrefixKey& key);
     ResVal<CFuturesUserValue> GetFuturesUserValues(const CFuturesUserHeightPrefixKey& key);
     Res EraseFuturesUserValues(const CFuturesUserHeightPrefixKey& key);
-    boost::optional<uint32_t> GetMostRecentFuturesHeight();
+
     void ForEachFuturesUserValues(std::function<bool(const CFuturesUserHeightPrefixKey&, const CFuturesUserValue&)> callback, const CFuturesUserHeightPrefixKey& start =
             {std::numeric_limits<uint32_t>::max(), {}, std::numeric_limits<uint32_t>::max()});
     void ForEachFuturesUserValuesWithOwner(std::function<bool(const CFuturesUserOwnerPrefixKey&, const CFuturesUserValue&)> callback, const CFuturesUserOwnerPrefixKey& start);

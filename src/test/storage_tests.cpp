@@ -2,6 +2,7 @@
 #include <rpc/client.h>
 #include <rpc/util.h>
 
+#include <init.h>
 #include <interfaces/chain.h>
 #include <key_io.h>
 #include <masternodes/accountshistory.h>
@@ -468,6 +469,8 @@ BOOST_AUTO_TEST_CASE(LowerBoundTest)
 
 BOOST_AUTO_TEST_CASE(CreateFuturesMultiIndexTest)
 {
+    pcustomcsview->SetLastHeight(Params().GetConsensus().FortCanningRoadHeight);
+
     const CFuturesUserHeightPrefixKey key[] = { {100u, {0}, 10u}, {101u, {1}, 11u}, {102u, {2}, 12u}, {103u, {3}, 13u}, {104u, {4}, 14u} };
     CFuturesUserValue future[] = { {{{0u}, 1000}, 50u}, {{{1u}, 1001}, 51u}, {{{2u}, 1002}, 52u}, {{{3u}, 1003}, 53u}, {{{4u}, 1004}, 54u} };
 
@@ -491,7 +494,7 @@ BOOST_AUTO_TEST_CASE(CreateFuturesMultiIndexTest)
     }
 
     // CreateFuturesMultiIndex
-    pcustomcsview->CreateFuturesMultiIndexIfNeeded();
+    CreateFuturesMultiIndexIfNeeded();
     // Cache has been flushed already. Flush to disk
     BOOST_CHECK(pcustomcsDB->Flush());
 
@@ -505,7 +508,7 @@ BOOST_AUTO_TEST_CASE(CreateFuturesMultiIndexTest)
     BOOST_CHECK(pcustomcsview->WriteBy<CAccountsView::ByFutureSwapHeightKey>(key[4], future[4]));
 
     // Again CreateFuturesMultiIndex
-    pcustomcsview->CreateFuturesMultiIndexIfNeeded();
+    CreateFuturesMultiIndexIfNeeded();
     // Cache has been flushed already. Flush to disk
     BOOST_CHECK(pcustomcsDB->Flush());
 

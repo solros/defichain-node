@@ -419,6 +419,8 @@ public:
     /// @todo newbase move to networking?
     void CreateAndRelayConfirmMessageIfNeed(const CAnchorIndex::AnchorRec* anchor, const uint256 & btcTxHash, const CKey &masternodeKey);
 
+    void AddUndo(CCustomCSView & cache, uint256 const & txid, uint32_t height);
+
     // simplified version of undo, without any unnecessary undo data
     void OnUndoTx(uint256 const & txid, uint32_t height);
 

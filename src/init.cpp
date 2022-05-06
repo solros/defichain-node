@@ -932,6 +932,53 @@ std::vector<BlockFilterType> g_enabled_filter_types;
     std::terminate();
 };
 
+
+void CreateFuturesMultiIndexIfNeeded()
+{
+    if (pcustomcsview->GetLastHeight() < Params().GetConsensus().FortCanningRoadHeight) {
+        return;
+    }
+
+    // Make sure owner index entries do not already exist
+    CFuturesUserOwnerPrefixKey anyOwnerKey{{}, std::numeric_limits<uint32_t>::max(), std::numeric_limits<uint32_t>::max()};
+    if (auto it = pcustomcsview->LowerBound<CAccountsView::ByFutureSwapOwnerKey>(anyOwnerKey); it.Valid()) {
+        return;
+    }
+
+    // Check that height index entires do already exist
+    CFuturesUserHeightPrefixKey anyHeightKey{std::numeric_limits<uint32_t>::max(), {}, std::numeric_limits<uint32_t>::max()};
+    auto it = pcustomcsview->LowerBound<CAccountsView::ByFutureSwapHeightKey>(anyHeightKey);
+    if (!it.Valid()) {
+        return;
+    }
+
+    LogPrint(BCLog::BENCH, "FuturesSwap - Adding multi index in progress...\n");
+
+    auto startTime = GetTimeMillis();
+
+    std::multimap<uint32_t, CFuturesUserOwnerPrefixKey> keyMap;
+    for (; it.Valid(); it.Next()) {
+        keyMap.emplace(it.Key().height, TranslateFuturesKeyToOwnerPrefix(it.Key()));
+    }
+
+    auto mnview(*pcustomcsview);
+
+    for (auto heightIt = keyMap.begin(); heightIt != keyMap.end();) {
+        auto valueRange = keyMap.equal_range(heightIt->first);
+        for (auto valueIt{valueRange.first}; valueIt != valueRange.second; ++valueIt) {
+            mnview.StoreFuturesOwner(valueIt->second);
+        }
+        pcustomcsview->AddUndo(mnview, uint256S(std::string(64, '1')), valueRange.first->first);
+        mnview.Flush();
+        heightIt = valueRange.second;
+    }
+
+    pcustomcsview->Flush();
+
+    LogPrint(BCLog::BENCH, "FuturesSwap - Multi index took: %dms\n", GetTimeMillis() - startTime);
+}
+
+
 bool AppInitBasicSetup()
 {
     // ********************************************************* Step 1: setup
@@ -1627,7 +1674,8 @@ bool AppInitMain(InitInterfaces& interfaces)
                 // Ensure we are on latest DB version
                 pcustomcsview->SetDbVersion(CCustomCSView::DbVersion);
 
-                pcustomcsview->CreateFuturesMultiIndexIfNeeded();
+                CreateFuturesMultiIndexIfNeeded();
+
                 // Flush to disk
                 pcustomcsDB->Flush();
 

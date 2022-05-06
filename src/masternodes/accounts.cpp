@@ -105,32 +105,9 @@ static CFuturesUserHeightPrefixKey TranslateFuturesKeyToHeightPrefix(CFuturesUse
     return {key.height, key.owner, key.txn};
 }
 
-static CFuturesUserOwnerPrefixKey TranslateFuturesKeyToOwnerPrefix(CFuturesUserHeightPrefixKey const & key)
+CFuturesUserOwnerPrefixKey TranslateFuturesKeyToOwnerPrefix(CFuturesUserHeightPrefixKey const & key)
 {
     return {key.owner, key.height, key.txn};
-}
-
-void CAccountsView::CreateFuturesMultiIndexIfNeeded()
-{
-    CFuturesUserOwnerPrefixKey anyOwnerKey{{}, ~0u, ~0u};
-    if (auto it = LowerBound<ByFutureSwapOwnerKey>(anyOwnerKey); it.Valid()) {
-        return;
-    }
-
-    LogPrint(BCLog::BENCH, "FuturesSwap - Adding multi index in progress...\n");
-
-    auto startTime = GetTimeMillis();
-
-    CFuturesUserHeightPrefixKey startKey{~0u, {}, ~0u};
-    auto it = LowerBound<ByFutureSwapHeightKey>(startKey);
-    for (; it.Valid(); it.Next()) {
-        WriteBy<ByFutureSwapOwnerKey>(TranslateFuturesKeyToOwnerPrefix(it.Key()), NON_SERIALIZED_EMPTY_VALUE);
-    }
-
-    // Flush the cache
-    Flush();
-
-    LogPrint(BCLog::BENCH, "FuturesSwap - Multi index took: %dms\n", GetTimeMillis() - startTime);
 }
 
 Res CAccountsView::StoreFuturesUserValues(const CFuturesUserHeightPrefixKey& key, const CFuturesUserValue& futures)
@@ -139,6 +116,14 @@ Res CAccountsView::StoreFuturesUserValues(const CFuturesUserHeightPrefixKey& key
         return Res::Err("Failed to store futures");
     }
     if (!WriteBy<ByFutureSwapOwnerKey>(TranslateFuturesKeyToOwnerPrefix(key), NON_SERIALIZED_EMPTY_VALUE)) {
+        return Res::Err("Failed to store futures by owner key");
+    }
+
+    return Res::Ok();
+}
+
+Res CAccountsView::StoreFuturesOwner(const CFuturesUserOwnerPrefixKey& key) {
+    if (!WriteBy<ByFutureSwapOwnerKey>(key, NON_SERIALIZED_EMPTY_VALUE)) {
         return Res::Err("Failed to store futures by owner key");
     }
 
@@ -175,17 +160,6 @@ Res CAccountsView::EraseFuturesUserValues(const CFuturesUserHeightPrefixKey& key
     }
 
     return Res::Ok();
-}
-
-boost::optional<uint32_t> CAccountsView::GetMostRecentFuturesHeight()
-{
-    const CFuturesUserHeightPrefixKey key{std::numeric_limits<uint32_t>::max(), {}, std::numeric_limits<uint32_t>::max()};
-    auto it = LowerBound<ByFutureSwapHeightKey>(key);
-    if (it.Valid()) {
-        return it.Key().height;
-    }
-
-    return {};
 }
 
 ResVal<CFuturesUserValue> CAccountsView::GetFuturesUserValues(const CFuturesUserHeightPrefixKey& key) {

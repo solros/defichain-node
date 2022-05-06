@@ -847,6 +847,12 @@ void CCustomCSView::CreateAndRelayConfirmMessageIfNeed(const CAnchorIndex::Ancho
     }
 }
 
+void CCustomCSView::AddUndo(CCustomCSView & cache, uint256 const & txid, uint32_t height)
+{
+    auto& flushable = cache.GetStorage();
+    SetUndo({height, txid}, CUndo::Construct(GetStorage(), flushable.GetRaw()));
+}
+
 void CCustomCSView::OnUndoTx(uint256 const & txid, uint32_t height)
 {
     const auto undo = GetUndo(UndoKey{height, txid});

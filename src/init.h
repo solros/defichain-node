@@ -34,6 +34,8 @@ void Shutdown(InitInterfaces& interfaces);
 void InitLogging();
 //!Parameter interaction: change current parameters depending on various rules
 void InitParameterInteraction();
+//!Create Future Swap multi-index
+void CreateFuturesMultiIndexIfNeeded();
 
 /** Initialize DeFi Blockchain: Basic context setup.
  *  @note This can be done before daemonization. Do not call Shutdown() if this function fails.
