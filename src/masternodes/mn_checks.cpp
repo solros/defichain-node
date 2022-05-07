@@ -15,6 +15,7 @@
 #include <masternodes/consensus/smartcontracts.h>
 #include <masternodes/consensus/tokens.h>
 #include <masternodes/consensus/vaults.h>
+#include <masternodes/govvariables/attributes.h>
 #include <masternodes/mn_checks.h>
 #include <masternodes/res.h>
 #include <masternodes/vaulthistory.h>
@@ -257,6 +258,7 @@ class CCustomTxApplyVisitor
     uint64_t time;
     uint32_t height;
     CCustomCSView& mnview;
+    CFutureSwapView& futureSwapView;
     const CTransaction& tx;
     const CCoinsViewCache& coins;
     const Consensus::Params& consensus;
@@ -267,7 +269,7 @@ class CCustomTxApplyVisitor
         static_assert(std::is_base_of_v<CCustomTxVisitor, T1>, "CCustomTxVisitor base required");
 
         if constexpr (std::is_invocable_v<T1, T>)
-            return T1{mnview, coins, tx, consensus, height, time, txn}(obj);
+            return T1{mnview, futureSwapView, coins, tx, consensus, height, time, txn}(obj);
         else
         if constexpr (sizeof...(Args) != 0)
             return ConsensusHandler<T, Args...>(obj);
@@ -280,11 +282,12 @@ public:
                           uint32_t height,
                           const CCoinsViewCache& coins,
                           CCustomCSView& mnview,
+                          CFutureSwapView& futureSwapView,
                           const Consensus::Params& consensus,
                           uint64_t time,
                           uint32_t txn)
 
-        : txn(txn), time(time), height(height), mnview(mnview), tx(tx), coins(coins), consensus(consensus) {}
+        : txn(txn), time(time), height(height), mnview(mnview), futureSwapView(futureSwapView), tx(tx), coins(coins), consensus(consensus) {}
 
 
     template<typename T>
@@ -368,12 +371,12 @@ bool IsDisabledTx(uint32_t height, const CTransaction& tx, const Consensus::Para
     return IsDisabledTx(height, txType, consensus);
 }
 
-Res CustomTxVisit(CCustomCSView& mnview, const CCoinsViewCache& coins, const CTransaction& tx, uint32_t height, const Consensus::Params& consensus, const CCustomTxMessage& txMessage, uint64_t time, uint32_t txn) {
+Res CustomTxVisit(CCustomCSView& mnview, CFutureSwapView& futureSwapView, const CCoinsViewCache& coins, const CTransaction& tx, uint32_t height, const Consensus::Params& consensus, const CCustomTxMessage& txMessage, uint64_t time, uint32_t txn) {
     if (IsDisabledTx(height, tx, consensus)) {
         return Res::ErrCode(CustomTxErrCodes::Fatal, "Disabled custom transaction");
     }
     try {
-        return std::visit(CCustomTxApplyVisitor(tx, height, coins, mnview, consensus, time, txn), txMessage);
+        return std::visit(CCustomTxApplyVisitor(tx, height, coins, mnview, futureSwapView, consensus, time, txn), txMessage);
     } catch (const std::bad_variant_access& e) {
         return Res::Err(e.what());
     } catch (...) {
@@ -423,7 +426,7 @@ void PopulateVaultHistoryData(CHistoryWriters* writers, const CCustomTxMessage& 
     }
 }
 
-Res ApplyCustomTx(CCustomCSView& mnview, const CCoinsViewCache& coins, const CTransaction& tx, const Consensus::Params& consensus, uint32_t height, uint64_t time, uint32_t txn, CHistoryWriters* writers) {
+Res ApplyCustomTx(CCustomCSView& mnview, CFutureSwapView& futureSwapView, CUndosView& undosView, const CCoinsViewCache& coins, const CTransaction& tx, const Consensus::Params& consensus, uint32_t height, uint64_t time, uint32_t txn, CHistoryWriters* writers) {
     auto res = Res::Ok();
     if (tx.IsCoinBase() && height > 0) { // genesis contains custom coinbase txs
         return res;
@@ -441,11 +444,12 @@ Res ApplyCustomTx(CCustomCSView& mnview, const CCoinsViewCache& coins, const CTr
     }
     auto txMessage = customTypeToMessage(txType);
     CAccountsHistoryWriter view(mnview, height, txn, tx.GetHash(), uint8_t(txType), writers);
+    auto futureCopy(futureSwapView);
     if ((res = CustomMetadataParse(height, consensus, metadata, txMessage))) {
         if (writers) {
            PopulateVaultHistoryData(writers, txMessage, txType, height, txn, tx.GetHash());
         }
-        res = CustomTxVisit(view, coins, tx, height, consensus, txMessage, time, txn);
+        res = CustomTxVisit(view, futureCopy, coins, tx, height, consensus, txMessage, time, txn);
 
         // Track burn fee
         if (txType == CustomTxType::CreateToken
@@ -480,8 +484,15 @@ Res ApplyCustomTx(CCustomCSView& mnview, const CCoinsViewCache& coins, const CTr
         return res;
     }
 
-    mnview.AddUndo(view, tx.GetHash(), height);
+    if (!futureCopy.GetStorage().GetFlushableStorage()->GetRaw().empty()) {
+        undosView.AddUndo(UndoSource::FutureView, futureSwapView, futureCopy, tx.GetHash(), height);
+        futureCopy.Flush();
+    }
+
+    undosView.AddUndo(UndoSource::CustomView, mnview, view, tx.GetHash(), height);
+
     view.Flush();
+
     return res;
 }
 
@@ -716,6 +727,14 @@ Res CPoolSwap::ExecuteSwap(CCustomCSView& view, std::vector<DCT_ID> poolIDs, boo
         mnview.Flush();
     }
 
+    auto attributes = view.GetAttributes();
+    if (!attributes) {
+        attributes = std::make_shared<ATTRIBUTES>();
+    }
+
+    CDataStructureV0 dexKey{AttributeTypes::Live, ParamIDs::Economy, EconomyKeys::DexTokens};
+    auto dexBalances = attributes->GetValue(dexKey, CDexBalances{});
+
     // Set amount to be swapped in pool
     CTokenAmount swapAmountResult{obj.idTokenFrom, obj.amountFrom};
 
@@ -751,7 +770,23 @@ Res CPoolSwap::ExecuteSwap(CCustomCSView& view, std::vector<DCT_ID> poolIDs, boo
             }
         }
 
+        if (view.AreTokensLocked({pool->idTokenA.v, pool->idTokenB.v})) {
+            return Res::Err("Pool currently disabled due to locked token");
+        }
+
         auto dexfeeInPct = view.GetDexFeeInPct(currentID, swapAmount.nTokenId);
+
+        auto& balances = dexBalances[currentID];
+        auto forward = swapAmount.nTokenId == pool->idTokenA;
+
+        auto& totalTokenA = forward ? balances.totalTokenA : balances.totalTokenB;
+        auto& totalTokenB = forward ? balances.totalTokenB : balances.totalTokenA;
+
+        const auto& reserveAmount = forward ? pool->reserveA : pool->reserveB;
+        const auto& blockCommission = forward ? pool->blockCommissionA : pool->blockCommissionB;
+
+        const auto initReserveAmount = reserveAmount;
+        const auto initBlockCommission = blockCommission;
 
         // Perform swap
         poolResult = pool->Swap(swapAmount, dexfeeInPct, poolPrice, [&] (const CTokenAmount& dexfeeInAmount, const CTokenAmount& tokenAmount) {
@@ -800,6 +835,7 @@ Res CPoolSwap::ExecuteSwap(CCustomCSView& view, std::vector<DCT_ID> poolIDs, boo
                 if (!res) {
                     return res;
                 }
+                totalTokenA.feeburn += dexfeeInAmount.nValue;
             }
 
             // burn the dex out amount
@@ -808,6 +844,14 @@ Res CPoolSwap::ExecuteSwap(CCustomCSView& view, std::vector<DCT_ID> poolIDs, boo
                 if (!res) {
                     return res;
                 }
+                totalTokenB.feeburn += dexfeeOutAmount.nValue;
+            }
+
+            totalTokenA.swaps += (reserveAmount - initReserveAmount);
+            totalTokenA.commissions += (blockCommission - initBlockCommission);
+
+            if (lastSwap && obj.to == Params().GetConsensus().burnAddress) {
+                totalTokenB.feeburn += swapAmountResult.nValue;
             }
 
            return res;
@@ -828,6 +872,10 @@ Res CPoolSwap::ExecuteSwap(CCustomCSView& view, std::vector<DCT_ID> poolIDs, boo
         }
     }
 
+    if (!testOnly) {
+        attributes->SetValue(dexKey, std::move(dexBalances));
+        view.SetVariable(*attributes);
+    }
     // Assign to result for loop testing best pool swap result
     result = swapAmountResult.nValue;
 
@@ -886,5 +934,6 @@ bool IsVaultPriceValid(CCustomCSView& mnview, const CVaultId& vaultId, uint32_t 
                 if (auto fixedIntervalPrice = mnview.GetFixedIntervalPrice(loanToken->fixedIntervalPriceId))
                     if (!fixedIntervalPrice.val->isLive(mnview.GetPriceDeviation()))
                         return false;
+
     return true;
 }

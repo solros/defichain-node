@@ -11,6 +11,7 @@
 #include <serialize.h>
 #include <masternodes/accounts.h>
 #include <masternodes/anchors.h>
+#include <masternodes/futureswap.h>
 #include <masternodes/gv.h>
 #include <masternodes/icxorder.h>
 #include <masternodes/incentivefunding.h>
@@ -392,7 +393,7 @@ class CCustomCSView
         , public CTokensView
         , public CAccountsView
         , public CCommunityBalancesView
-        , public CUndosView
+        , public CUndosBaseView
         , public CPoolPairView
         , public CGovView
         , public CAnchorConfirmsView
@@ -401,6 +402,7 @@ class CCustomCSView
         , public CLoanView
         , public CVaultView
         , public CPropsView
+        , public CFutureBaseView
 {
     void CheckPrefixes()
     {
@@ -411,7 +413,7 @@ class CCustomCSView
             CFoundationsDebtView    ::  Debt,
             CAnchorRewardsView      ::  BtcTx,
             CTokensView             ::  ID, Symbol, CreationTx, LastDctId,
-            CAccountsView           ::  ByBalanceKey, ByHeightKey, ByFuturesSwapKey,
+            CAccountsView           ::  ByBalanceKey, ByHeightKey,
             CCommunityBalancesView  ::  ById,
             CUndosView              ::  ByUndoKey,
             CPoolPairView           ::  ByID, ByPair, ByShare, ByIDPair, ByPoolSwap, ByReserves, ByRewardPct, ByRewardLoanPct,
@@ -431,6 +433,7 @@ class CCustomCSView
                                         DestroyLoanSchemeKey, LoanInterestByVault, LoanTokenAmount, LoanLiquidationPenalty, LoanInterestV2ByVault,
             CVaultView              ::  VaultKey, OwnerVaultKey, CollateralKey, AuctionBatchKey, AuctionHeightKey, AuctionBidKey,
             CPropsView              ::  ByType, ByCycle, ByMnVote, ByStatus, ByVoting
+            CFutureBaseView         ::  ByFuturesSwapKey, ByFuturesOwnerKey
         >();
     }
 
@@ -466,11 +469,6 @@ public:
     // Generate auth and custom anchor teams based on current block
     void CalcAnchoringTeams(uint256 const & stakeModifier, const CBlockIndex *pindexNew);
 
-    void AddUndo(CCustomCSView & cache, uint256 const & txid, uint32_t height);
-
-    // simplified version of undo, without any unnecessary undo data
-    void OnUndoTx(uint256 const & txid, uint32_t height);
-
     bool CanSpend(const uint256 & txId, int height) const;
 
     bool CalculateOwnerRewards(CScript const & owner, uint32_t height);
@@ -479,10 +477,14 @@ public:
 
     ResVal<CCollateralLoans> GetLoanCollaterals(CVaultId const & vaultId, CBalances const & collaterals, uint32_t height, int64_t blockTime, bool useNextPrice = false, bool requireLivePrice = true);
 
-    ResVal<CAmount> GetValidatedIntervalPrice(CTokenCurrencyPair priceFeedId, bool useNextPrice, bool requireLivePrice);
+    ResVal<CAmount> GetValidatedIntervalPrice(const CTokenCurrencyPair& priceFeedId, bool useNextPrice, bool requireLivePrice);
 
     [[nodiscard]] std::optional<CLoanSetLoanTokenImplementation> GetLoanTokenFromAttributes(const DCT_ID& id) const override;
     [[nodiscard]] std::optional<CLoanSetCollateralTokenImpl> GetCollateralTokenFromAttributes(const DCT_ID& id) const override;
+
+    [[nodiscard]] bool AreTokensLocked(const std::set<uint32_t>& tokenIds) const override;
+    [[nodiscard]] std::optional<CTokenImpl> GetTokenGuessId(const std::string & str, DCT_ID & id) const override;
+    [[nodiscard]] std::optional<CLoanSetLoanTokenImpl> GetLoanTokenByID(DCT_ID const & id) const override;
 
     void SetDbVersion(int version);
 

@@ -129,14 +129,9 @@ Res CSmartContractsConsensus::operator()(const CFutureSwapMessage& obj) const {
     auto balances = attributes->GetValue(liveKey, CBalances{});
 
     if (obj.withdraw) {
-        const auto blockPeriod = attributes->GetValue(blockKey, CAmount{});
-        const uint32_t startHeight = height - (height % blockPeriod);
         std::map<CFuturesUserKey, CFuturesUserValue> userFuturesValues;
 
-        mnview.ForEachFuturesUserValues([&](const CFuturesUserKey& key, const CFuturesUserValue& futuresValues) {
-            if (key.height <= startHeight)
-                return false;
-
+        futureSwapView.ForEachFuturesUserValues([&](const CFuturesUserKey& key, const CFuturesUserValue& futuresValues) {
             if (key.owner == obj.owner &&
                 futuresValues.source.nTokenId == obj.source.nTokenId &&
                 futuresValues.destination == obj.destination) {
@@ -151,7 +146,7 @@ Res CSmartContractsConsensus::operator()(const CFutureSwapMessage& obj) const {
 
         for (const auto& [key, value] : userFuturesValues) {
             totalFutures.Add(value.source.nValue);
-            mnview.EraseFuturesUserValues(key);
+            futureSwapView.EraseFuturesUserValues(key);
         }
 
         auto res = totalFutures.Sub(obj.source.nValue);
@@ -159,7 +154,7 @@ Res CSmartContractsConsensus::operator()(const CFutureSwapMessage& obj) const {
             return res;
 
         if (totalFutures.nValue > 0) {
-            auto res = mnview.StoreFuturesUserValues({height, obj.owner, txn}, {totalFutures, obj.destination});
+            auto res = futureSwapView.StoreFuturesUserValues({height, obj.owner, txn}, {totalFutures, obj.destination});
             if (!res)
                 return res;
         }
@@ -176,14 +171,14 @@ Res CSmartContractsConsensus::operator()(const CFutureSwapMessage& obj) const {
         if (!res)
             return res;
 
-        res = mnview.StoreFuturesUserValues({height, obj.owner, txn}, {obj.source, obj.destination});
+        res = futureSwapView.StoreFuturesUserValues({height, obj.owner, txn}, {obj.source, obj.destination});
         if (!res)
             return res;
 
         balances.Add(obj.source);
     }
 
-    attributes->attributes[liveKey] = balances;
+    attributes->SetValue(liveKey, std::move(balances));
     return mnview.SetVariable(*attributes);
 }
 

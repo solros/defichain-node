@@ -5,6 +5,7 @@
 #include <masternodes/govvariables/attributes.h>
 
 #include <masternodes/accountshistory.h> /// CAccountsHistoryWriter
+#include <masternodes/futureswap.h>
 #include <masternodes/masternodes.h> /// CCustomCSView
 #include <masternodes/mn_checks.h> /// GetAggregatePrice
 
@@ -50,6 +51,7 @@ const std::map<uint8_t, std::string>& ATTRIBUTES::displayVersions() {
 
 const std::map<std::string, uint8_t>& ATTRIBUTES::allowedTypes() {
     static const std::map<std::string, uint8_t> types{
+        {"locks",       AttributeTypes::Locks},
         {"params",      AttributeTypes::Param},
         {"poolpairs",   AttributeTypes::Poolpairs},
         {"token",       AttributeTypes::Token},
@@ -60,6 +62,7 @@ const std::map<std::string, uint8_t>& ATTRIBUTES::allowedTypes() {
 const std::map<uint8_t, std::string>& ATTRIBUTES::displayTypes() {
     static const std::map<uint8_t, std::string> types{
         {AttributeTypes::Live,      "live"},
+        {AttributeTypes::Locks,     "locks"},
         {AttributeTypes::Param,     "params"},
         {AttributeTypes::Poolpairs, "poolpairs"},
         {AttributeTypes::Token,     "token"},
@@ -75,10 +78,18 @@ const std::map<std::string, uint8_t>& ATTRIBUTES::allowedParamIDs() {
     return params;
 }
 
+const std::map<std::string, uint8_t>& ATTRIBUTES::allowedLocksIDs() {
+    static const std::map<std::string, uint8_t> params{
+            {"token",       ParamIDs::TokenID},
+    };
+    return params;
+}
+
 const std::map<uint8_t, std::string>& ATTRIBUTES::displayParamsIDs() {
     static const std::map<uint8_t, std::string> params{
         {ParamIDs::DFIP2201,    "dfip2201"},
         {ParamIDs::DFIP2203,    "dfip2203"},
+        {ParamIDs::TokenID,     "token"},
         {ParamIDs::Economy,     "economy"},
     };
     return params;
@@ -160,6 +171,7 @@ const std::map<uint8_t, std::map<uint8_t, std::string>>& ATTRIBUTES::displayKeys
                 {EconomyKeys::DFIP2203Current,   "dfip2203_current"},
                 {EconomyKeys::DFIP2203Burned,    "dfip2203_burned"},
                 {EconomyKeys::DFIP2203Minted,    "dfip2203_minted"},
+                {EconomyKeys::DexTokens,         "dex"},
             }
         },
     };
@@ -261,6 +273,11 @@ const std::map<uint8_t, std::map<uint8_t,
                 {DFIPKeys::BlockPeriod,  VerifyInt64},
             }
         },
+        {
+            AttributeTypes::Locks, {
+                {ParamIDs::TokenID,          VerifyBool},
+            }
+        },
     };
     return parsers;
 }
@@ -274,7 +291,7 @@ static Res ShowError(const std::string& key, const std::map<std::string, uint8_t
 }
 
 Res ATTRIBUTES::ProcessVariable(const std::string& key, const std::string& value,
-                                std::function<Res(const CAttributeType&, const CAttributeValue&)> applyVariable) {
+                                const std::function<Res(const CAttributeType&, const CAttributeValue&)>& applyVariable) {
 
     if (key.size() > 128) {
         return Res::Err("Identifier exceeds maximum length (128)");
@@ -311,66 +328,64 @@ Res ATTRIBUTES::ProcessVariable(const std::string& key, const std::string& value
     auto type = itype->second;
 
     uint32_t typeId{0};
-    if (type != AttributeTypes::Param) {
+    if (type == AttributeTypes::Param) {
+        auto id = allowedParamIDs().find(keys[2]);
+        if (id == allowedParamIDs().end()) {
+            return ::ShowError("params", allowedParamIDs());
+        }
+        typeId = id->second;
+    } else if (type == AttributeTypes::Locks) {
+        auto id = allowedLocksIDs().find(keys[2]);
+        if (id == allowedLocksIDs().end()) {
+            return ::ShowError("locks", allowedLocksIDs());
+        }
+        typeId = id->second;
+    } else {
         auto id = VerifyInt32(keys[2]);
         if (!id) {
             return std::move(id);
         }
         typeId = *id.val;
+    }
+
+    uint8_t typeKey;
+    uint32_t locksKey{0};
+    if (type != AttributeTypes::Locks) {
+        auto ikey = allowedKeys().find(type);
+        if (ikey == allowedKeys().end()) {
+            return Res::Err("Unsupported type {%d}", type);
+        }
+
+        itype = ikey->second.find(keys[3]);
+        if (itype == ikey->second.end()) {
+            return ::ShowError("key", ikey->second);
+        }
+
+        typeKey = itype->second;
+
+        if (type == AttributeTypes::Param) {
+            if (typeId == ParamIDs::DFIP2201) {
+                if (typeKey == DFIPKeys::RewardPct ||
+                    typeKey == DFIPKeys::BlockPeriod) {
+                    return Res::Err("Unsupported type for DFIP2201 {%d}", typeKey);
+                }
+            } else if (typeId == ParamIDs::DFIP2203) {
+                if (typeKey == DFIPKeys::Premium ||
+                    typeKey == DFIPKeys::MinSwap) {
+                    return Res::Err("Unsupported type for DFIP2203 {%d}", typeKey);
+                }
+
+                if (typeKey == DFIPKeys::BlockPeriod) {
+                    futureBlockUpdated = true;
+                }
+            } else {
+                return Res::Err("Unsupported Param ID");
+            }
+        }
     } else {
-        auto id = allowedParamIDs().find(keys[2]);
-        if (id == allowedParamIDs().end()) {
-            return ::ShowError("param", allowedParamIDs());
-        }
-        typeId = id->second;
-    }
-
-    auto ikey = allowedKeys().find(type);
-    if (ikey == allowedKeys().end()) {
-        return Res::Err("Unsupported type {%d}", type);
-    }
-
-    itype = ikey->second.find(keys[3]);
-    if (itype == ikey->second.end()) {
-        return ::ShowError("key", ikey->second);
-    }
-
-    auto typeKey = itype->second;
-
-    if (type == AttributeTypes::Param) {
-        if (typeId == ParamIDs::DFIP2201) {
-            if (typeKey == DFIPKeys::RewardPct ||
-                typeKey == DFIPKeys::BlockPeriod) {
-                return Res::Err("Unsupported type for DFIP2201 {%d}", typeKey);
-            }
-        } else if (typeId == ParamIDs::DFIP2203) {
-            if (typeKey == DFIPKeys::Premium ||
-                typeKey == DFIPKeys::MinSwap) {
-                return Res::Err("Unsupported type for DFIP2203 {%d}", typeKey);
-            }
-
-            if (typeKey == DFIPKeys::BlockPeriod) {
-                futureBlockUpdated = true;
-            }
-        } else {
-            return Res::Err("Unsupported Param ID");
-        }
-    }
-
-    CDataStructureV0 attrV0{type, typeId, typeKey};
-
-    if (attrV0.IsExtendedSize()) {
-        if (keys.size() != 5 || keys[4].empty()) {
-            return Res::Err("Exact 5 keys are required {%d}", keys.size());
-        }
-        auto id = VerifyInt32(keys[4]);
-        if (!id) {
-            return std::move(id);
-        }
-        attrV0.keyId = *id.val;
-    } else {
-       if (keys.size() != 4) {
-           return Res::Err("Exact 4 keys are required {%d}", keys.size());
+        typeKey = ParamIDs::TokenID;
+        if (const auto keyValue = VerifyInt32(keys[3])) {
+            locksKey = *keyValue;
         }
     }
 
@@ -380,6 +395,28 @@ Res ATTRIBUTES::ProcessVariable(const std::string& key, const std::string& value
             if (!attribValue) {
                 return std::move(attribValue);
             }
+
+            if (type == AttributeTypes::Locks) {
+                return applyVariable(CDataStructureV0{type, typeId, locksKey}, *attribValue.val);
+            }
+
+            CDataStructureV0 attrV0{type, typeId, typeKey};
+
+            if (attrV0.IsExtendedSize()) {
+                if (keys.size() != 5 || keys[4].empty()) {
+                    return Res::Err("Exact 5 keys are required {%d}", keys.size());
+                }
+                auto id = VerifyInt32(keys[4]);
+                if (!id) {
+                    return std::move(id);
+                }
+                attrV0.keyId = *id.val;
+            } else {
+                if (keys.size() != 4) {
+                    return Res::Err("Exact 4 keys are required {%d}", keys.size());
+                }
+            }
+
             return applyVariable(attrV0, *attribValue.val);
         }
     } catch (const std::out_of_range&) {
@@ -398,7 +435,7 @@ ResVal<CScript> GetFutureSwapContractAddress()
     return {contractAddress, Res::Ok()};
 }
 
-Res ATTRIBUTES::RefundFuturesContracts(CCustomCSView &mnview, const uint32_t height, const uint32_t tokenID)
+Res ATTRIBUTES::RefundFuturesContracts(CCustomCSView &mnview, CFutureSwapView& futureSwapView, const uint32_t height, const uint32_t tokenID)
 {
     CDataStructureV0 blockKey{AttributeTypes::Param, ParamIDs::DFIP2203, DFIPKeys::BlockPeriod};
     const auto blockPeriod = GetValue(blockKey, CAmount{});
@@ -408,7 +445,7 @@ Res ATTRIBUTES::RefundFuturesContracts(CCustomCSView &mnview, const uint32_t hei
 
     std::map<CFuturesUserKey, CFuturesUserValue> userFuturesValues;
 
-    mnview.ForEachFuturesUserValues([&](const CFuturesUserKey& key, const CFuturesUserValue& futuresValues) {
+    futureSwapView.ForEachFuturesUserValues([&](const CFuturesUserKey& key, const CFuturesUserValue& futuresValues) {
         if (tokenID != std::numeric_limits<uint32_t>::max()) {
             if (futuresValues.source.nTokenId.v == tokenID || futuresValues.destination == tokenID) {
                 userFuturesValues[key] = futuresValues;
@@ -432,7 +469,7 @@ Res ATTRIBUTES::RefundFuturesContracts(CCustomCSView &mnview, const uint32_t hei
 
     for (const auto& [key, value] : userFuturesValues) {
 
-        mnview.EraseFuturesUserValues(key);
+        futureSwapView.EraseFuturesUserValues(key);
 
         CHistoryWriters subWriters{paccountHistoryDB.get(), nullptr, nullptr};
         CAccountsHistoryWriter subView(mnview, height, txn--, {}, uint8_t(CustomTxType::FutureSwapRefund), &subWriters);
@@ -456,7 +493,7 @@ Res ATTRIBUTES::RefundFuturesContracts(CCustomCSView &mnview, const uint32_t hei
         }
     }
 
-    attributes[liveKey] = balances;
+    SetValue(liveKey, std::move(balances));
 
     return Res::Ok();
 }
@@ -484,11 +521,11 @@ Res ATTRIBUTES::Import(const UniValue & val) {
                         } else {
                             newAttr.key = TokenKeys::PaybackDFIFeePCT;
                         }
-                        attributes[newAttr] = attrValue;
+                        SetValue(newAttr, attrValue);
                         return Res::Ok();
                     }
                 }
-                attributes[attribute] = attrValue;
+                SetValue(attribute, attrValue);
                 return Res::Ok();
             }
         );
@@ -509,13 +546,20 @@ UniValue ATTRIBUTES::Export() const {
         try {
             const auto id = attrV0->type == AttributeTypes::Param
                             || attrV0->type == AttributeTypes::Live
+                            || attrV0->type == AttributeTypes::Locks
                             ? displayParamsIDs().at(attrV0->typeId)
                             : KeyBuilder(attrV0->typeId);
+
+
+
+            const auto keyId = attrV0->type == AttributeTypes::Locks
+                               ? KeyBuilder(attrV0->key)
+                               : displayKeys().at(attrV0->type).at(attrV0->key);
 
             auto key = KeyBuilder(displayVersions().at(VersionTypes::v0),
                                   displayTypes().at(attrV0->type),
                                   id,
-                                  displayKeys().at(attrV0->type).at(attrV0->key));
+                                  keyId);
 
             if (attrV0->IsExtendedSize()) {
                 key = KeyBuilder(key, attrV0->keyId);
@@ -539,6 +583,18 @@ UniValue ATTRIBUTES::Export() const {
                 result.pushKV("paybackfees", AmountsToJSON(paybacks->tokensFee.balances));
                 result.pushKV("paybacktokens", AmountsToJSON(paybacks->tokensPayback.balances));
                 ret.pushKV(key, result);
+            } else if (auto balances = std::get_if<CDexBalances>(&attribute.second)) {
+                for (const auto& pool : *balances) {
+                    auto& dexTokenA = pool.second.totalTokenA;
+                    auto& dexTokenB = pool.second.totalTokenB;
+                    auto poolkey = KeyBuilder(key, pool.first.v);
+                    ret.pushKV(KeyBuilder(poolkey, "total_commission_a"), ValueFromUint(dexTokenA.commissions));
+                    ret.pushKV(KeyBuilder(poolkey, "total_commission_b"), ValueFromUint(dexTokenB.commissions));
+                    ret.pushKV(KeyBuilder(poolkey, "fee_burn_a"), ValueFromUint(dexTokenA.feeburn));
+                    ret.pushKV(KeyBuilder(poolkey, "fee_burn_b"), ValueFromUint(dexTokenB.feeburn));
+                    ret.pushKV(KeyBuilder(poolkey, "total_swap_a"), ValueFromUint(dexTokenA.swaps));
+                    ret.pushKV(KeyBuilder(poolkey, "total_swap_b"), ValueFromUint(dexTokenB.swaps));
+                }
             }
         } catch (const std::out_of_range&) {
             // Should not get here, that's mean maps are mismatched
@@ -655,6 +711,18 @@ Res ATTRIBUTES::Validate(const CCustomCSView & view) const
             case AttributeTypes::Live:
                 break;
 
+            case AttributeTypes::Locks:
+                if (view.GetLastHeight() < Params().GetConsensus().GreatWorldHeight) {
+                    return Res::Err("Cannot be set before GreatWorld");
+                }
+                if (attrV0->typeId != ParamIDs::TokenID) {
+                    return Res::Err("Unrecognised locks id");
+                }
+                if (!view.GetLoanTokenByID(DCT_ID{attrV0->key}).has_value()) {
+                    return Res::Err("No loan token with id (%d)", attrV0->key);
+                }
+                break;
+
             default:
                 return Res::Err("Unrecognised type (%d)", attrV0->type);
         }
@@ -663,7 +731,7 @@ Res ATTRIBUTES::Validate(const CCustomCSView & view) const
     return Res::Ok();
 }
 
-Res ATTRIBUTES::Apply(CCustomCSView & mnview, const uint32_t height)
+Res ATTRIBUTES::Apply(CCustomCSView& mnview, CFutureSwapView& futureSwapView, const uint32_t height)
 {
     for (const auto& attribute : attributes) {
         auto attrV0 = std::get_if<CDataStructureV0>(&attribute.first);
@@ -743,7 +811,7 @@ Res ATTRIBUTES::Apply(CCustomCSView & mnview, const uint32_t height)
                     continue;
                 }
 
-                auto res = RefundFuturesContracts(mnview, height, attrV0->typeId);
+                auto res = RefundFuturesContracts(mnview, futureSwapView, height, attrV0->typeId);
                 if (!res) {
                     return res;
                 }
@@ -763,7 +831,7 @@ Res ATTRIBUTES::Apply(CCustomCSView & mnview, const uint32_t height)
                     continue;
                 }
 
-                auto res = RefundFuturesContracts(mnview, height);
+                auto res = RefundFuturesContracts(mnview, futureSwapView, height);
                 if (!res) {
                     return res;
                 }
